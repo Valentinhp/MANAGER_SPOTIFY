@@ -7,10 +7,13 @@ Ventana para sincronizar podcasts con sus playlists (data_podcasts).
 import tkinter as tk
 from tkinter import ttk, messagebox
 from spotipy import Spotify
+import threading
 from ..utils.spotify_utils import (
     get_podcast_episodes,
     get_playlist_items,
     add_episodes_to_playlist,
+    show,
+    playlist,
 )
 from ..data_podcasts import data_podcasts
 
@@ -27,54 +30,72 @@ def ventana_sincronizar_podcasts_data(parent: ttk.Frame, sp: Spotify) -> ttk.Fra
     txt_log.pack(padx=10, pady=6, fill=tk.BOTH, expand=True)
 
     def log(msg: str):
-        txt_log.insert(tk.END, msg + "\n")
-        txt_log.see(tk.END)
-        frame.update_idletasks()
+        frame.after(0, lambda: (
+            txt_log.insert(tk.END, msg + "\n"),
+            txt_log.see(tk.END)
+        ))
 
-    def sincronizar():
+    def update_progress(idx, total, podcast_name, playlist_name):
+        frame.after(0, lambda: (
+            lbl_estado.config(text=f"{idx}/{total}  {podcast_name} → {playlist_name}"),
+            prog.config(value=idx)
+        ))
+
+    def _sincronizar_thread():
         if not data_podcasts:
             log("No hay podcasts configurados en data_podcasts.py")
             return
 
         total = len(data_podcasts)
-        prog["value"] = 0
+        
         for idx, pair in enumerate(data_podcasts, start=1):
             pod_id, pl_id = pair["podcast"], pair["playlist"]
 
-            try:
-                podcast_name = sp.show(pod_id, market="US")["name"]
-            except Exception:
-                podcast_name = f"Podcast {pod_id[:8]}…"
-            try:
-                playlist_name = sp.playlist(pl_id, fields="name")["name"]
-            except Exception:
-                playlist_name = f"Playlist {pl_id[:8]}…"
-
-            lbl_estado.config(text=f"{idx}/{total}  {podcast_name} → {playlist_name}")
-            frame.update_idletasks()
-
-            try:
-                eps = get_podcast_episodes(sp, pod_id)
-                if not eps:
-                    log(f"❌ {podcast_name}: sin episodios o error.")
-                    prog["value"] = idx
-                    continue
-
-                antes = set(get_playlist_items(sp, pl_id))
-                add_episodes_to_playlist(sp, pl_id, eps)
-                despues = set(get_playlist_items(sp, pl_id))
-                nuevos = len(despues) - len(antes)
-                if nuevos:
-                    log(f"✅ {podcast_name}: {nuevos} nuevos → {playlist_name}")
-                else:
-                    log(f"• {podcast_name}: 0 nuevos")
-            except Exception as e:
-                log(f"❌ ERROR con {podcast_name}: {e}")
+            show_info = show(sp, pod_id, market="US")
+            podcast_name = show_info["name"] if show_info else f"Podcast {pod_id[:8]}…"
             
-            prog["value"] = idx
+            pl_info = playlist(sp, pl_id, fields="name")
+            playlist_name = pl_info["name"] if pl_info else f"Playlist {pl_id[:8]}…"
 
-        lbl_estado.config(text="¡Sincronización completa!")
-        messagebox.showinfo("Terminado", "Todos los podcasts han sido sincronizados.")
+            update_progress(idx, total, podcast_name, playlist_name)
 
-    ttk.Button(frame, text="Iniciar sincronización", command=sincronizar).pack(pady=10)
+            eps = get_podcast_episodes(sp, pod_id)
+            if not eps:
+                log(f"❌ {podcast_name}: sin episodios o error.")
+                continue
+
+            playlist_items_before = get_playlist_items(sp, pl_id)
+            if playlist_items_before is None:
+                log(f"❌ {podcast_name}: No se pudo obtener los items de la playlist {playlist_name}.")
+                continue
+            
+            antes = set(playlist_items_before)
+            add_episodes_to_playlist(sp, pl_id, eps)
+            
+            playlist_items_after = get_playlist_items(sp, pl_id)
+            if playlist_items_after is None:
+                log(f"❌ {podcast_name}: No se pudo verificar los items de la playlist {playlist_name} después de agregar.")
+                continue
+
+            despues = set(playlist_items_after)
+            nuevos = len(despues) - len(antes)
+            if nuevos:
+                log(f"✅ {podcast_name}: {nuevos} nuevos → {playlist_name}")
+            else:
+                log(f"• {podcast_name}: 0 nuevos")
+        
+        frame.after(0, lambda: (
+            lbl_estado.config(text="¡Sincronización completa!"),
+            messagebox.showinfo("Terminado", "Todos los podcasts han sido sincronizados."),
+            btn_sinc.config(state="normal")
+        ))
+
+    def sincronizar():
+        btn_sinc.config(state="disabled")
+        thread = threading.Thread(target=_sincronizar_thread)
+        thread.daemon = True
+        thread.start()
+
+    btn_sinc = ttk.Button(frame, text="Iniciar sincronización", command=sincronizar)
+    btn_sinc.pack(pady=10)
     return frame

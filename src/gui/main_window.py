@@ -6,6 +6,7 @@ minimalista, suave y muy agradable.
 import tkinter as tk
 from tkinter import Menu, ttk
 from spotipy import Spotify
+import threading
 
 # Importa tus ventanas y funciones
 from .playlists import (
@@ -23,6 +24,8 @@ from .admin_podcasts import VentanaAdminPodcasts
 from .assign_artist import ventana_asignar_artista_playlist
 from .manage_assignments import VentanaGestionarAsignaciones
 from .sync_assignments import VentanaSincronizarAsignaciones
+from .log_viewer import ventana_log_viewer
+from ..utils.spotify_utils import check_spotify_api_status
 
 # Variable global para mantener la referencia al frame actual
 current_frame = None
@@ -42,6 +45,8 @@ def build_main_window(sp: Spotify) -> tk.Tk:
     style.configure("Title.TLabel", background="#121212", foreground="white", font=("Segoe UI", 24, "bold"))
     style.configure("Sub.TLabel", background="#121212", foreground="#bbbbbb", font=("Segoe UI", 14))
     style.configure("Content.TFrame", background="#121212")
+    # Estilo para el botón de refrescar
+    style.configure("Refresh.TButton", font=("Segoe UI", 9), padding=5)
 
 
     # --- Frame principal de contenido ---
@@ -89,6 +94,7 @@ def build_main_window(sp: Spotify) -> tk.Tk:
     menu_bar.add_cascade(label="🔍 Buscar", menu=m_bus)
 
     menu_bar.add_command(label="📈 Top Tracks", command=lambda: show_frame(ventana_top_tracks))
+    menu_bar.add_command(label="📋 Registro", command=lambda: show_frame(ventana_log_viewer))
     menu_bar.add_command(label="❌ Salir", command=root.destroy)
 
     # --- Pantalla de inicio ---
@@ -107,7 +113,7 @@ def build_main_window(sp: Spotify) -> tk.Tk:
             "🧩 Administrar Podcasts y Playlists personalizados",
         ]
         for feat in features:
-            lbl = ttk.Label(home_frame, text=feat)
+            lbl = ttk.Label(home_frame, text=feat, background="#121212")
             lbl.pack(anchor="w", pady=4)
 
         btn1 = ttk.Button(home_frame, text="Ver Playlists", command=lambda: show_frame(ventana_ver_playlists))
@@ -122,7 +128,51 @@ def build_main_window(sp: Spotify) -> tk.Tk:
     # Mostrar la pantalla de inicio al arrancar
     show_frame(create_home_frame)
 
-    footer = tk.Label(root, text="✔️ Listo para usar", bg="#181818", fg="#aaaaaa", anchor="w", padx=10)
-    footer.pack(side=tk.BOTTOM, fill=tk.X)
+    # --- Barra de estado de la API ---
+    status_bar = tk.Frame(root, bg="#181818")
+    status_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(1, 0), ipady=2)
+
+    status_indicator = tk.Canvas(status_bar, width=12, height=12, bg="#181818", highlightthickness=0)
+    status_indicator.pack(side=tk.LEFT, padx=(10, 5))
+    status_light = status_indicator.create_oval(2, 2, 12, 12, fill="grey", outline="")
+
+    status_label = tk.Label(status_bar, text="Checking API status...", bg="#181818", fg="#aaaaaa", font=("Segoe UI", 9))
+    status_label.pack(side=tk.LEFT)
+
+    def _update_status_ui(indicator, description):
+        color_map = {
+            "none": "#1DB954",      # Verde (Operacional)
+            "minor": "#FFD700",     # Amarillo (Degradado)
+            "major": "#FFA500",     # Naranja (Parcialmente fuera de servicio)
+            "critical": "#FF4500",  # Rojo (Fuera de servicio)
+            "error": "#808080",     # Gris (Error de conexión)
+            "unknown": "#808080"    # Gris (Desconocido)
+        }
+        color = color_map.get(indicator, "#808080")
+        
+        status_indicator.itemconfig(status_light, fill=color)
+        status_label.config(text=description)
+        refresh_button.config(state=tk.NORMAL) # Habilitar botón de nuevo
+
+    def _check_api_in_thread():
+        try:
+            indicator, description = check_spotify_api_status()
+            # Programar la actualización de la UI en el hilo principal
+            root.after(0, _update_status_ui, indicator, description)
+        except Exception as e:
+            # Asegurarse de que cualquier error se maneje y se muestre en la UI
+            root.after(0, _update_status_ui, "error", f"Failed to check status: {e}")
+
+    def refresh_status():
+        status_label.config(text="Checking...")
+        refresh_button.config(state=tk.DISABLED) # Deshabilitar mientras se actualiza
+        # Iniciar la comprobación en un nuevo hilo para no bloquear la UI
+        threading.Thread(target=_check_api_in_thread, daemon=True).start()
+
+    refresh_button = ttk.Button(status_bar, text="🔄", style="Refresh.TButton", command=refresh_status)
+    refresh_button.pack(side=tk.RIGHT, padx=10)
+
+    # Comprobación inicial al arrancar
+    refresh_status()
 
     return root

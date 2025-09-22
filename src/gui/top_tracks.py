@@ -6,6 +6,16 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from spotipy import Spotify
+from ..utils.spotify_utils import (
+    search,
+    artist_albums,
+    album_tracks,
+    tracks as get_tracks,
+    artists as get_artists,
+    get_current_user,
+    user_playlist_create,
+    playlist_add_items,
+)
 
 def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=15)
@@ -61,56 +71,60 @@ def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
             messagebox.showwarning("Atención", "Pon el nombre del artista.")
             return
 
-        try:
-            arts = sp.search(q=nombre, type="artist", limit=1)["artists"]["items"]
-            if not arts:
-                messagebox.showinfo("Info", "Artista no encontrado.")
-                return
-            art = arts[0]
-        except Exception as e:
-            messagebox.showerror("Error", f"No pude buscar artista:\n{e}")
+        search_res = search(sp, q=nombre, type="artist", limit=1)
+        if not search_res or not search_res["artists"]["items"]:
+            messagebox.showinfo("Info", "Artista no encontrado.")
             return
+        art = search_res["artists"]["items"][0]
 
-        album_ids = set(); offset = 0
+        album_ids = set()
+        offset = 0
         while True:
-            try:
-                resp = sp.artist_albums(art["id"], album_type="album,single,compilation,appears_on", limit=50, offset=offset, country="US")["items"]
-                if not resp: break
-                album_ids.update(alb["id"] for alb in resp)
-                offset += len(resp)
-            except Exception: break
+            resp = artist_albums(sp, art["id"], album_type="album,single,compilation,appears_on", limit=50, offset=offset, country="US")
+            if not resp or not resp.get("items"):
+                break
+            album_ids.update(alb["id"] for alb in resp["items"])
+            offset += len(resp["items"])
 
         raw_tracks = []
         for alb_id in album_ids:
             off2 = 0
             while True:
-                try:
-                    items = sp.album_tracks(alb_id, limit=50, offset=off2)["items"]
-                    if not items: break
-                    raw_tracks.extend(items)
-                    off2 += len(items)
-                except Exception: break
+                tracks_res = album_tracks(sp, alb_id, limit=50, offset=off2)
+                if not tracks_res or not tracks_res.get("items"):
+                    break
+                raw_tracks.extend(tracks_res["items"])
+                off2 += len(tracks_res["items"])
         
-        if not raw_tracks: return messagebox.showinfo("Info","No hay pistas disponibles.")
+        if not raw_tracks:
+            messagebox.showinfo("Info","No hay pistas disponibles.")
+            return
 
-        seen = set(); uniq = []
+        seen = set()
+        uniq = []
         for t in raw_tracks:
             if t["id"] and t["id"] not in seen:
-                seen.add(t["id"]); uniq.append(t)
+                seen.add(t["id"])
+                uniq.append(t)
         
         for i in range(0, len(uniq), 50):
-            batch = uniq[i:i+50]; ids = [t["id"] for t in batch]
-            try:
-                details = sp.tracks(ids)["tracks"]
-                for det, orig in zip(details, batch):
-                    orig["popularity"] = det.get("popularity",0)
-                    orig["album"] = det.get("album",{})
-            except Exception: continue
+            batch = uniq[i:i+50]
+            ids = [t["id"] for t in batch]
+            details_res = get_tracks(sp, ids)
+            if details_res and details_res.get("tracks"):
+                for det, orig in zip(details_res["tracks"], batch):
+                    if det:
+                        orig["popularity"] = det.get("popularity",0)
+                        orig["album"] = det.get("album",{})
 
-        try: n = max(1,min(int(e_num.get()),50))
-        except: n = 10
-        try: min_pop = max(0,min(int(e_pop.get()),100))
-        except: min_pop = 0
+        try:
+            n = max(1,min(int(e_num.get()),50))
+        except:
+            n = 10
+        try:
+            min_pop = max(0,min(int(e_pop.get()),100))
+        except:
+            min_pop = 0
         coll_opt = coll_var.get()
         secs = [g.strip().lower() for g in e_gen.get().split(",") if g.strip()]
 
@@ -119,15 +133,15 @@ def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         if secs:
             for i in range(0,len(list(artist_ids)),50):
                 batch = list(artist_ids)[i:i+50]
-                try:
-                    for aobj in sp.artists(batch)["artists"]:
-                        genres[aobj["id"]] = [g.lower() for g in aobj.get("genres",[])]
-                except Exception: continue
+                artists_res = get_artists(sp, batch)
+                if artists_res and artists_res.get("artists"):
+                    for aobj in artists_res["artists"]:
+                        if aobj:
+                            genres[aobj["id"]] = [g.lower() for g in aobj.get("genres",[])]
 
         filt = []
         for t in uniq:
             if t.get("popularity", 0) < min_pop: continue
-            # FIX: La siguiente línea tenía un error de sintaxis
             if coll_opt == "Solo" and len(t["artists"]) > 1: continue
             if coll_opt == "Colab" and len(t["artists"]) < 2: continue
             if secs and not any(any(s in g for g in genres.get(a["id"],[])) for s in secs for a in t["artists"]):
@@ -151,13 +165,22 @@ def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
             return
         pl_name = simpledialog.askstring("Playlist","Nombre para la playlist:")
         if not pl_name: return
-        try:
-            uid = sp.current_user()["id"]
-            pl = sp.user_playlist_create(uid, pl_name, public=True)
-            sp.playlist_add_items(pl["id"], frame.uris)
-            messagebox.showinfo("¡Listo!","Playlist creada.")
-        except Exception as e:
-            messagebox.showerror("Error",f"No pude crear la playlist:\n{e}")
+        
+        user = get_current_user(sp)
+        if not user:
+            messagebox.showerror("Error", "No se pudo obtener la información del usuario.")
+            return
+            
+        pl = user_playlist_create(sp, user["id"], pl_name, public=True, description="")
+        if not pl:
+            messagebox.showerror("Error", "No se pudo crear la playlist.")
+            return
+            
+        if not playlist_add_items(sp, pl["id"], frame.uris):
+            messagebox.showerror("Error", "No se pudieron agregar las canciones a la playlist.")
+            return
+            
+        messagebox.showinfo("¡Listo!","Playlist creada.")
 
     ttk.Button(btn_frame, text="Buscar", command=buscar_y_mostrar).pack(side="left", padx=5)
     ttk.Button(btn_frame, text="Crear Playlist", command=crear_playlist_top).pack(side="left", padx=5)

@@ -7,6 +7,14 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import re, threading, queue, time, difflib
 from spotipy import Spotify
+from ..utils.spotify_utils import (
+    recommendations,
+    search,
+    artists as get_artists,
+    get_current_user,
+    user_playlist_create,
+    playlist_add_items,
+)
 
 # Lista de géneros hardcodeada (endpoint obsoleto)
 GENRE_SEEDS = [
@@ -71,47 +79,55 @@ def ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     artist_genres_cache: dict[str, list[str]] = {}
     frame.uris = []
 
-    def call_safe(fn, *a, **k):
-        for i in range(3):
-            try:
-                return fn(*a, **k)
-            except Exception as e:
-                if "429" in str(e) or "rate" in str(e).lower():
-                    time.sleep(1.5 * (i+1))
-                else:
-                    raise
-        raise RuntimeError("Rate-limit continuo en Spotify")
-
     cola = queue.Queue()
     def _worker(params):
-        texto_raw, generos_usr, seeds, lim, pop_min, texto_busq, use_pop, use_gen = params
+        texto_raw, generos_usr, seeds, lim, pop_min, texto_busq, use_pop, is_tema_mode = params
         pistas = []
-        if use_gen and seeds:
-            try:
-                pistas = call_safe(sp.recommendations, seed_genres=seeds, limit=lim)("tracks")
-            except: pistas = []
-        if len(pistas) < lim:
-            try:
-                extra = call_safe(sp.search, q=texto_busq or texto_raw, type="track", limit=lim*2)("tracks")["items"]
-                pistas.extend(extra)
-            except: pass
+
+        if is_tema_mode:
+            if seeds:
+                recs = recommendations(sp, seed_genres=seeds, limit=lim, target_popularity=pop_min)
+                if recs and recs.get("tracks"):
+                    pistas = recs["tracks"]
+            if len(pistas) < lim:
+                search_res = search(sp, q=texto_busq or texto_raw, type="track", limit=lim)
+                if search_res and search_res.get("tracks"):
+                    pistas.extend(search_res["tracks"]["items"])
+        else:  # Modo "frase"
+            search_res = search(sp, q=texto_busq or texto_raw, type="track", limit=lim)
+            if search_res and search_res.get("tracks"):
+                pistas = search_res["tracks"]["items"]
+
         vistos, únicos = set(), []
         for p in pistas:
             if p and p.get("id") and p["id"] not in vistos:
                 vistos.add(p["id"]); únicos.append(p)
         pistas = únicos
-        if use_gen and generos_usr:
+
+        if generos_usr:
             faltantes = [i for p in pistas for i in [a["id"] for a in p["artists"]] if i and i not in artist_genres_cache]
             for lote in (faltantes[i:i+50] for i in range(0, len(faltantes), 50)):
-                try:
-                    arts = call_safe(sp.artists, lote)("artists")
-                    for aobj in arts:
+                arts_res = get_artists(sp, lote)
+                if arts_res and arts_res.get("artists"):
+                    for aobj in arts_res["artists"]:
                         artist_genres_cache[aobj["id"]] = aobj.get("genres", [])
-                except: 
+                else:
                     for aid in lote: artist_genres_cache[aid] = []
-            pistas = [p for p in pistas if any(any(g in gen.lower() for gen in artist_genres_cache.get(a["id"], [])) for g in generos_usr for a in p["artists"])]
+            
+            pistas_filtradas = []
+            for p in pistas:
+                artist_genres = set()
+                for a in p["artists"]:
+                    genres = artist_genres_cache.get(a.get("id"), [])
+                    artist_genres.update(g.lower() for g in genres)
+                
+                if any(g in artist_genres for g in generos_usr):
+                    pistas_filtradas.append(p)
+            pistas = pistas_filtradas
+
         if use_pop:
-            pistas = [p for p in pistas if p.get("popularity",0) >= pop_min]
+            pistas = [p for p in pistas if p.get("popularity", 0) >= pop_min]
+            
         cola.put(pistas[:lim])
 
     def lanzar_busqueda():
@@ -133,7 +149,10 @@ def ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         pop_min = max(0, min(int(entry_pop.get()), 100))
         status.config(text="Buscando…"); text_area.delete("1.0","end")
 
-        threading.Thread(target=_worker, args=((texto_raw, generos_usr, seeds, lim, pop_min, texto_busq, True, True),), daemon=True).start()
+        is_tema_mode = modo.get() == 'tema'
+        params = (texto_raw, generos_usr, seeds, lim, pop_min, texto_busq, True, is_tema_mode)
+        threading.Thread(target=_worker, args=(params,), daemon=True).start()
+        
         def check():
             if cola.empty():
                 frame.after(100, check)
@@ -155,13 +174,22 @@ def ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     def crear_playlist_advanced():
         nombre = entry_playlist.get().strip() or "Mi playlist"
         if not frame.uris: return messagebox.showinfo("Info", "No hay canciones para agregar.")
-        try:
-            uid = sp.current_user()["id"]
-            pl = sp.user_playlist_create(uid, nombre, public=True)
-            sp.playlist_add_items(pl["id"], frame.uris)
-            messagebox.showinfo("¡Listo!", f"Playlist '{nombre}' creada con {len(frame.uris)} canciones.")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo crear la playlist:\n{e}")
+        
+        user = get_current_user(sp)
+        if not user:
+            messagebox.showerror("Error", "No se pudo obtener la información del usuario.")
+            return
+        
+        pl = user_playlist_create(sp, user["id"], nombre, public=True, description="")
+        if not pl:
+            messagebox.showerror("Error", "No se pudo crear la playlist.")
+            return
+            
+        if not playlist_add_items(sp, pl["id"], frame.uris):
+            messagebox.showerror("Error", "No se pudieron agregar las canciones a la playlist.")
+            return
+
+        messagebox.showinfo("¡Listo!", f"Playlist '{nombre}' creada con {len(frame.uris)} canciones.")
 
     frm_btn = ttk.Frame(frame); frm_btn.grid(row=6, column=0, columnspan=2, pady=8)
     ttk.Button(frm_btn, text="Buscar/Recomendar", command=lanzar_busqueda).pack(side="left", padx=8)

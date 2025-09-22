@@ -29,8 +29,5 @@ SCOPES: str = (
 # ---------------------------------------------------
 # LOGGING
 # ---------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+# La configuración se ha movido a app.py para un control más explícito
 logger = logging.getLogger(__name__)

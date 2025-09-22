@@ -7,20 +7,28 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from spotipy import Spotify
 import time
-import unicodedata
-import re
+from ..utils.spotify_utils import (
+    obtener_canciones_artista,
+    get_current_user,
+    search,
+    user_playlist_create,
+    playlist_add_items,
+    current_user_playlists,
+    playlist_items,
+    next_page,
+)
 
 class VentanaGestorAutomatico(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):
         super().__init__(parent, **kwargs)
         self.sp = sp
 
-        try:
-            self.user_id = self.sp.current_user()["id"]
-        except Exception as e:
-            messagebox.showerror("Error de Autenticación", f"No se pudo obtener info del usuario.\n{e}")
+        user = get_current_user(self.sp)
+        if not user:
+            messagebox.showerror("Error de Autenticación", "No se pudo obtener la información del usuario.")
             self.destroy()
             return
+        self.user_id = user["id"]
 
         self.artists_found: list[dict] = []
         self.songs: list[dict] = []
@@ -98,15 +106,21 @@ class VentanaGestorAutomatico(ttk.Frame):
 
     def search_artist(self):
         q = self.entry_artist.get().strip()
-        if not q: return messagebox.showinfo("Info", "Ingresa un nombre.")
-        try:
-            res = self.sp.search(q=q, type="artist", limit=10)["artists"]["items"]
-            self.artists_found = res
+        if not q:
+            messagebox.showinfo("Info", "Ingresa un nombre.")
+            return
+        
+        res = search(self.sp, q=q, type="artist", limit=10)
+        if res and "artists" in res and "items" in res["artists"]:
+            self.artists_found = res["artists"]["items"]
             self.lb_artists.delete(0, tk.END)
-            for art in res:
+            for art in self.artists_found:
                 self.lb_artists.insert(tk.END, art["name"])
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al buscar artista:\n{e}")
+        else:
+            messagebox.showerror("Error", "Error al buscar artista.")
+            self.artists_found = []
+            self.lb_artists.delete(0, tk.END)
+
 
     def on_artist_select(self, _evt):
         sel = self.lb_artists.curselection()
@@ -117,111 +131,20 @@ class VentanaGestorAutomatico(ttk.Frame):
             self.fetch_artist_songs()
 
     def fetch_artist_songs(self):
-        try:
-            self.songs = self.obtener_canciones_artista_completas(self.artist_id)
-            messagebox.showinfo("Info", f"Se encontraron {len(self.songs)} canciones únicas.")
-            
-            self.tree_songs.delete(*self.tree_songs.get_children())
-            for s in self.songs:
-                self.tree_songs.insert("", "end", values=(s["name"],))
-            
-            # Actualizar el label de resumen
-            self.lbl_report.config(text=f"Total únicas: {len(self.songs)}")
+        self.songs = obtener_canciones_artista(self.sp, self.artist_id)
+        if self.songs is None:
+            messagebox.showerror("Error", "Ocurrió un error al obtener las canciones (posiblemente un timeout o error de API).")
+            self.songs = []
 
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al obtener canciones:\n{e}")
-
-    def obtener_canciones_artista_completas(self, artist_id: str):
-        """Devuelve TODAS las canciones del artista sin duplicados “alternos”."""
-        MARKETS = ("US", "MX")
-        ALT_FLAGS = (
-            "acoustic", "live", "en vivo", "unplugged", "instrumental",
-            "remaster", "remastered", "demo", "karaoke", "edit",
-            "mix", "remix", "versión", "version", "session"
-        )
-        NOISE = (
-            "feat.", "featuring", "ft.", "with", "con"
-        )
-        elegido: dict[str, dict] = {}
-        total_raw = 0
-        clean_punct = re.compile(r"[()\[\]{}\-–_:]")
-
-        def slug(txt: str) -> str:
-            txt = unicodedata.normalize("NFKD", txt).encode("ascii", "ignore").decode()
-            txt = txt.lower()
-            txt = clean_punct.sub(" ", txt)
-            for w in (*ALT_FLAGS, *NOISE):
-                txt = txt.replace(w, " ")
-            return " ".join(txt.split())
-
-        def es_alt(titulo: str, album: str) -> bool:
-            t, a = titulo.lower(), album.lower()
-            return any(w in t or w in a for w in ALT_FLAGS)
-
-        def considera(track: dict, album_name: str):
-            nonlocal total_raw
-            total_raw += 1
-            tid = track.get("id")
-            if not tid:
-                return
-            title = track.get("name", "").strip()
-            base = slug(title)
-            alt  = es_alt(title, album_name)
-            if base not in elegido or (elegido[base]["alt"] and not alt):
-                elegido[base] = {"track": track, "alt": alt}
-
-        # 1) álbumes / singles / compilados
-        try:
-            alb_resp = self.sp.artist_albums(
-                artist_id,
-                album_type="album,single,compilation,appears_on",
-                limit=50
-            )
-        except Exception:
-            return []
-        albums = []
-        while alb_resp:
-            albums.extend(alb_resp.get("items", []))
-            alb_resp = self.sp.next(alb_resp) if alb_resp.get("next") else None
-
-        for alb in albums:
-            alb_name = alb.get("name", "")
-            for m in MARKETS:
-                try:
-                    tr_resp = self.sp.album_tracks(alb["id"], limit=50, market=m)
-                except Exception:
-                    continue
-                while tr_resp:
-                    for t in tr_resp.get("items", []):
-                        if any(a["id"] == artist_id for a in t.get("artists", [])):
-                            considera(t, alb_name)
-                    tr_resp = self.sp.next(tr_resp) if tr_resp.get("next") else None
-
-        # 2) búsqueda global (singles sueltos / colaboraciones)
-        try:
-            art_name = self.sp.artist(artist_id)["name"]
-            offset = 0
-            while True:
-                sr = self.sp.search(q=f'artist:"{art_name}"', type="track",
-                                    limit=50, offset=offset)
-                if not sr or not sr.get("tracks"): break
-                
-                for t in sr["tracks"]["items"]:
-                    if any(a["id"] == artist_id for a in t.get("artists", [])):
-                        considera(t, "")
-                
-                if not sr["tracks"]["next"]:
-                    break
-                offset += 50
-        except Exception:
-            pass
-
-        # resultado final
-        canciones = [
-            {"id": d["track"]["id"], "name": d["track"]["name"]}
-            for d in elegido.values()
-        ]
-        return canciones
+        messagebox.showinfo("Info", f"Se encontraron {len(self.songs)} canciones únicas.")
+        
+        self.tree_songs.delete(*self.tree_songs.get_children())
+        
+        sorted_songs = sorted(self.songs, key=lambda s: s.get('name', ''))
+        for s in sorted_songs:
+            self.tree_songs.insert("", "end", values=(s["name"],))
+        
+        self.lbl_report.config(text=f"Total únicas: {len(self.songs)}")
 
     def update_play_option(self):
         for w in self.dynamic.winfo_children(): w.destroy()
@@ -242,26 +165,35 @@ class VentanaGestorAutomatico(ttk.Frame):
 
     def crear_playlist_y_agregar_songs(self):
         name = self.new_name.get().strip()
-        if not name: return messagebox.showinfo("Info", "Ingresa nombre.")
-        if not self.songs: return messagebox.showinfo("Info", "No hay canciones para agregar.")
-        try:
-            pl = self.sp.user_playlist_create(self.user_id, name, public=True, description="Playlist generada automáticamente")
-            ids = [s["id"] for s in self.songs]
-            for i in range(0, len(ids), 100):
-                self.sp.playlist_add_items(pl["id"], ids[i:i + 100])
-                time.sleep(0.2)
-            messagebox.showinfo("Listo", "Playlist creada y canciones agregadas.")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo crear la playlist: {e}")
+        if not name:
+            messagebox.showinfo("Info", "Ingresa nombre.")
+            return
+        if not self.songs:
+            messagebox.showinfo("Info", "No hay canciones para agregar.")
+            return
+
+        pl = user_playlist_create(self.sp, self.user_id, name, public=True, description="Playlist generada automáticamente")
+        if not pl:
+            messagebox.showerror("Error", "No se pudo crear la playlist.")
+            return
+
+        ids = [s["id"] for s in self.songs]
+        for i in range(0, len(ids), 100):
+            if not playlist_add_items(self.sp, pl["id"], ids[i:i + 100]):
+                messagebox.showerror("Error", f"No se pudieron agregar algunas canciones a la playlist.")
+                return
+            time.sleep(0.2)
+        messagebox.showinfo("Listo", "Playlist creada y canciones agregadas.")
 
     def load_all_playlists(self):
-        self.playlists.clear(); self.pl_list.delete(0, tk.END)
-        res = self.sp.current_user_playlists(limit=50)
+        self.playlists.clear()
+        self.pl_list.delete(0, tk.END)
+        res = current_user_playlists(self.sp, limit=50)
         while res:
             for p in res["items"]:
                 self.playlists.append(p)
                 self.pl_list.insert(tk.END, p["name"])
-            res = self.sp.next(res) if res["next"] else None
+            res = next_page(self.sp, res) if res.get("next") else None
 
     def filtrar_playlists(self, _evt):
         term = self.search_pl.get().strip().lower()
@@ -271,40 +203,47 @@ class VentanaGestorAutomatico(ttk.Frame):
 
     def actualizar_playlist_seleccionada(self):
         sel = self.pl_list.curselection()
-        if not sel: return messagebox.showinfo("Info", "Selecciona playlist.")
-        if not self.songs: return messagebox.showinfo("Info", "No hay canciones para agregar.")
+        if not sel:
+            messagebox.showinfo("Info", "Selecciona playlist.")
+            return
+        if not self.songs:
+            messagebox.showinfo("Info", "No hay canciones para agregar.")
+            return
 
         selected_name = self.pl_list.get(sel[0])
         pl_id = None
-        # Busca el ID de la playlist en la lista completa para evitar desajustes por el filtro
         for p in self.playlists:
             if p["name"] == selected_name:
                 pl_id = p["id"]
                 break
-        if not pl_id: return messagebox.showerror("Error", "No se encontró el ID de la playlist.")
+        if not pl_id:
+            messagebox.showerror("Error", "No se encontró el ID de la playlist.")
+            return
 
-        try:
-            existentes = set()
-            res = self.sp.playlist_items(pl_id, fields='items(track(id)),next')
-            while res:
-                existentes.update({item["track"]["id"] for item in res["items"] if item and item.get("track") and item["track"].get("id")})
-                res = self.sp.next(res) if res["next"] else None
-            
-            pendientes = [s["id"] for s in self.songs if s["id"] not in existentes]
-            if not pendientes: return messagebox.showinfo("Info", "No hay canciones nuevas que agregar.")
+        existentes = set()
+        res = playlist_items(self.sp, pl_id, fields='items(track(id)),next')
+        while res:
+            existentes.update({item["track"]["id"] for item in res["items"] if item and item.get("track") and item["track"].get("id")})
+            res = next_page(self.sp, res) if res.get("next") else None
+        
+        pendientes = [s["id"] for s in self.songs if s["id"] not in existentes]
+        if not pendientes:
+            messagebox.showinfo("Info", "No hay canciones nuevas que agregar.")
+            return
 
-            for i in range(0, len(pendientes), 100):
-                self.sp.playlist_add_items(pl_id, pendientes[i:i + 100])
-                time.sleep(0.2)
-            messagebox.showinfo("Listo", f"Playlist actualizada con {len(pendientes)} canciones nuevas.")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo actualizar la playlist: {e}")
+        for i in range(0, len(pendientes), 100):
+            if not playlist_add_items(self.sp, pl_id, pendientes[i:i + 100]):
+                messagebox.showerror("Error", f"No se pudieron agregar algunas canciones a la playlist.")
+                return
+            time.sleep(0.2)
+        messagebox.showinfo("Listo", f"Playlist actualizada con {len(pendientes)} canciones nuevas.")
 
     def reset_to_artist_search(self):
-        self.songs.clear(); self.artists_found.clear()
+        self.songs.clear()
+        self.artists_found.clear()
         self.lb_artists.delete(0, tk.END)
         self.tree_songs.delete(*self.tree_songs.get_children())
-        self.lbl_report.config(text="No hay datos aún.") # Resetear el resumen
+        self.lbl_report.config(text="No hay datos aún.")
         self.entry_artist.delete(0, tk.END)
         self.play_var.set("nueva")
         self.update_play_option()

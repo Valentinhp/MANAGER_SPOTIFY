@@ -62,9 +62,10 @@ class VentanaGestionarAsignaciones(ttk.Frame):
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 asignaciones = json.load(f)
                 for asign in sorted(asignaciones, key=lambda x: x.get("artista_nombre", "")):
+                    composite_iid = f'{asign["artista_id"]}|{asign["playlist_id"]}'
                     self.tree.insert("", tk.END, 
                                      values=(asign.get("artista_nombre", "N/A"), asign.get("playlist_nombre", "N/A")),
-                                     iid=asign["artista_id"])
+                                     iid=composite_iid)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             logger.warning(f"No se pudo cargar el archivo de asignaciones: {e}")
 
@@ -78,9 +79,13 @@ class VentanaGestionarAsignaciones(ttk.Frame):
 
         if messagebox.askyesno("Confirmar", "¿Seguro que quieres eliminar esta asignación?"):
             try:
+                artist_id, playlist_id = selected_item_iid.split('|')
                 with open(DATA_FILE, "r+", encoding="utf-8") as f:
                     asignaciones = json.load(f)
-                    asignaciones_filtradas = [a for a in asignaciones if a["artista_id"] != selected_item_iid]
+                    asignaciones_filtradas = [
+                        a for a in asignaciones 
+                        if not (a["artista_id"] == artist_id and a["playlist_id"] == playlist_id)
+                    ]
                     f.seek(0)
                     f.truncate()
                     json.dump(asignaciones_filtradas, f, indent=4, ensure_ascii=False)

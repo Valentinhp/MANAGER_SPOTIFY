@@ -7,6 +7,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from spotipy import Spotify
 import random
+from ..utils.spotify_utils import (
+    recommendations,
+    get_current_user,
+    user_playlist_create,
+    playlist_add_items,
+)
 
 def ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=20)
@@ -32,15 +38,16 @@ def ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         text_area.insert(tk.END, "Buscando recomendaciones...\n")
         frame.update_idletasks()
 
-        for genre in user_genres:
-            try:
-                # Usar recomendaciones directamente es más eficiente
-                results = sp.recommendations(seed_genres=[g.lower().replace(' ', '-') for g in user_genres], limit=20, country="US")
-                for track in results.get("tracks", []):
-                    if track:
-                        recs.append((track["name"], ", ".join(a["name"] for a in track["artists"]), track["id"]))
-            except Exception as e:
-                text_area.insert(tk.END, f"[ERROR] Genero '{genre}': {e}\n")
+        # Usar la función de spotify_utils
+        results = recommendations(sp, seed_genres=[g.lower().replace(' ', '-') for g in user_genres], limit=20, country="US")
+        
+        if results and results.get("tracks"):
+            for track in results.get("tracks", []):
+                if track:
+                    recs.append((track["name"], ", ".join(a["name"] for a in track["artists"]), track["id"]))
+        else:
+            text_area.insert(tk.END, f"[ERROR] No se pudieron obtener recomendaciones.\n")
+
         
         vistos = {}
         for nom, arts, tid in recs:
@@ -66,16 +73,24 @@ def ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         if not pl_name:
             return
 
-        try:
-            uid = sp.me()["id"]
-            playlist = sp.user_playlist_create(uid, pl_name, public=False, description="Playlist generada a partir de tus géneros")
-            uris = [f"spotify:track:{tid}" for (_, _, tid) in final_tracks]
-            if uris:
-                for i in range(0, len(uris), 100):
-                    sp.playlist_add_items(playlist["id"], uris[i:i+100])
-            messagebox.showinfo("Éxito", f"Playlist ‘{pl_name}’ creada con {len(uris)} canciones.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Al crear/llenar la playlist: {e}")
+        user = get_current_user(sp)
+        if not user:
+            messagebox.showerror("Error", "No se pudo obtener el ID del usuario.")
+            return
+
+        playlist = user_playlist_create(sp, user["id"], pl_name, public=False, description="Playlist generada a partir de tus géneros")
+        if not playlist:
+            messagebox.showerror("Error", "No se pudo crear la playlist.")
+            return
+
+        uris = [f"spotify:track:{tid}" for (_, _, tid) in final_tracks]
+        if uris:
+            for i in range(0, len(uris), 100):
+                if not playlist_add_items(sp, playlist["id"], uris[i:i+100]):
+                    messagebox.showerror("Error", "No se pudieron agregar las canciones a la playlist.")
+                    return
+        
+        messagebox.showinfo("Éxito", f"Playlist ‘{pl_name}’ creada con {len(uris)} canciones.")
 
     ttk.Button(frame, text="Generar y Crear Playlist", command=generar_playlist).pack(pady=10)
     return frame

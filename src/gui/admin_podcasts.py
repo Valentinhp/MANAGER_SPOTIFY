@@ -9,6 +9,13 @@ from tkinter import ttk, messagebox, simpledialog
 import os
 import importlib.util
 from spotipy import Spotify
+from ..utils.spotify_utils import (
+    search,
+    current_user_playlists,
+    next_page,
+    get_current_user,
+    user_playlist_create,
+)
 
 # ─────────────────────────────────────────────────────────────
 # Funciones para cargar y guardar data_podcasts.py
@@ -147,43 +154,38 @@ class VentanaAdminPodcasts(ttk.Frame):
     def _buscar_podcast(self):
         q = self.entry_pod.get().strip()
         if not q: return
-        try:
-            shows = self.sp.search(q=q, type="show", limit=15)["shows"]["items"]
+        
+        res = search(self.sp, q=q, type="show", limit=15)
+        if res and "shows" in res and "items" in res["shows"]:
             self.lb_pod.delete(0, "end")
-            for i, s in enumerate(shows):
+            for s in res["shows"]["items"]:
                 self.lb_pod.insert("end", f'{s["name"]} — {s["id"]}''')
-        except Exception as e:
-            messagebox.showerror("Error de API", f"No se pudo buscar podcast: {e}")
+        else:
+            messagebox.showerror("Error de API", "No se pudo buscar el podcast.")
 
     def _buscar_playlist(self):
         q = self.entry_pl.get().strip()
-        if not q: 
-            res = self.sp.current_user_playlists(limit=50)
+        self.lb_pl.delete(0, "end")
+        
+        playlists = []
+        if q:
+            # Search for playlists
+            res = search(self.sp, q=q, type="playlist", limit=20)
+            if res and "playlists" in res and "items" in res["playlists"]:
+                playlists = res["playlists"]["items"]
         else:
-            all_pl = []
-            res = self.sp.current_user_playlists(limit=50)
-            while True:
-                all_pl.extend(res["items"])
-                if res["next"]:
-                    res = self.sp.next(res)
-                else:
-                    break
-            
-            self.lb_pl.delete(0, "end")
-            for p in all_pl:
-                if q.lower() in p["name"].lower():
-                    self.lb_pl.insert("end", f'{p["name"]} — {p["id"]}''')
+            # Get user's playlists
+            res = current_user_playlists(self.sp, limit=50)
+            while res:
+                playlists.extend(res["items"])
+                res = next_page(self.sp, res) if res.get("next") else None
+        
+        if not playlists:
+            messagebox.showinfo("Info", "No se encontraron playlists.")
             return
 
-        self.lb_pl.delete(0, "end")
-        playlists = res['items']
         for p in playlists:
             self.lb_pl.insert("end", f'{p["name"]} — {p["id"]}''')
-        while res['next']:
-            res = self.sp.next(res)
-            playlists = res['items']
-            for p in playlists:
-                self.lb_pl.insert("end", f'{p["name"]} — {p["id"]}''')
 
     def _on_select_podcast(self, event):
         sel = self.lb_pod.curselection()
@@ -210,15 +212,21 @@ class VentanaAdminPodcasts(ttk.Frame):
     def _crear_playlist(self):
         nombre = simpledialog.askstring("Nueva playlist", "Nombre para la nueva playlist:")
         if not nombre: return
-        try:
-            uid = self.sp.current_user()["id"]
-            nueva = self.sp.user_playlist_create(user=uid, name=nombre)
+
+        user = get_current_user(self.sp)
+        if not user:
+            messagebox.showerror("Error de Autenticación", "No se pudo obtener la información del usuario.")
+            return
+        
+        nueva = user_playlist_create(self.sp, user=user["id"], name=nombre, public=False, description="")
+        if nueva:
             messagebox.showinfo("Éxito", f"Playlist creada: {nueva['name']}")
             self.entry_pl.delete(0, "end")
-            self.entry_pl.insert(0, nueva["name"])
+            self.entry_pl.insert(0, nueva["id"])
             self._buscar_playlist()
-        except Exception as e:
-            messagebox.showerror("Error al crear", str(e))
+        else:
+            messagebox.showerror("Error al crear", "No se pudo crear la playlist.")
+
 
     def _asignar(self):
         pod = self.selected_podcast_id

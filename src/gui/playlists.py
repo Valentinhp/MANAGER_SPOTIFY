@@ -9,11 +9,8 @@ from spotipy import Spotify
 from ..utils.spotify_utils import (
     obtener_playlists_usuario,
     crear_playlist as api_crear_playlist,
-    obtener_contenido_playlist,
-    eliminar_items_playlist,
-    obtener_canciones_artista,
-    obtener_episodios_podcast_sencillo,
-    agregar_canciones_a_playlist,
+    unfollow_playlist,
+    replace_playlist_items,
 )
 
 def ventana_ver_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
@@ -105,10 +102,8 @@ def ventana_eliminar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
             return
         errores = []
         for pid, nombre, _ in seleccion:
-            try:
-                sp.current_user_unfollow_playlist(pid)
-            except Exception as e:
-                errores.append(f"{nombre}: {e}")
+            if not unfollow_playlist(sp, pid):
+                errores.append(nombre)
         
         if errores:
             messagebox.showerror("Errores", "Algunas no se pudieron eliminar:\n" + "\n".join(errores))
@@ -119,6 +114,7 @@ def ventana_eliminar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         nonlocal pls
         pls = obtener_playlists_usuario(sp)
         filtrar(None)
+
 
     ttk.Button(frame, text="Eliminar seleccionadas", command=confirmar_elim).pack(pady=10)
     return frame
@@ -170,10 +166,8 @@ def ventana_vaciar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
             return
         errores = []
         for pid, nombre, _ in seleccion:
-            try:
-                sp.playlist_replace_items(pid, [])
-            except Exception as e:
-                errores.append(f"{nombre}: {e}")
+            if not replace_playlist_items(sp, pid, []):
+                errores.append(nombre)
         if errores:
             messagebox.showerror("Errores", "Errores al vaciar:\n" + "\n".join(errores))
         else:

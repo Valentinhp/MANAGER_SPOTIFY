@@ -14,6 +14,7 @@ from .playlists import (
     ventana_eliminar_playlists,
     ventana_ver_playlists,
     ventana_crear_playlist,
+    ventana_limpiar_playlists,
 )
 from .podcasts import ventana_sincronizar_podcasts_data
 from .artist_manager import VentanaGestorAutomatico
@@ -72,6 +73,7 @@ def build_main_window(sp: Spotify) -> tk.Tk:
     m_play.add_command(label="Ver", command=lambda: show_frame(ventana_ver_playlists))
     m_play.add_command(label="Crear", command=lambda: show_frame(ventana_crear_playlist))
     m_play.add_command(label="Vaciar", command=lambda: show_frame(ventana_vaciar_playlists))
+    m_play.add_command(label="Limpiar Duplicados", command=lambda: show_frame(ventana_limpiar_playlists))
     m_play.add_command(label="Eliminar", command=lambda: show_frame(ventana_eliminar_playlists))
     menu_bar.add_cascade(label="🎵 Playlists", menu=m_play)
 

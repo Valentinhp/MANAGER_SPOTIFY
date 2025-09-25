@@ -399,6 +399,97 @@ def replace_playlist_items(sp: Spotify, playlist_id: str, items: list):
     return True
 
 # --------------------------------------------------------------------------------
+# PLAYLIST CLEANING
+# --------------------------------------------------------------------------------
+
+@handle_spotify_errors()
+def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int, int]:
+    """
+    Elimina canciones duplicadas de una playlist.
+
+    Compara las canciones por su ID. Si hay duplicados, conserva solo la primera
+    aparición y elimina las demás.
+
+    Args:
+        sp (Spotify): Objeto cliente de Spotipy.
+        playlist_id (str): ID de la playlist a limpiar.
+
+    Returns:
+        Tuple[int, int]: Una tupla con (número de duplicados eliminados, total de canciones restantes).
+                         Devuelve (0, 0) si hay un error.
+    """
+    logger.info(f"Iniciando limpieza de duplicados para la playlist: {playlist_id}")
+
+    try:
+        # 1. Obtener todos los tracks de la playlist
+        items = []
+        offset = 0
+        while True:
+            resp = sp.playlist_items(playlist_id, limit=100, offset=offset, fields="items(track(id,uri)),next")
+            batch = resp.get("items", [])
+            if not batch:
+                break
+            items.extend(batch)
+            offset += len(batch)
+            if not resp.get("next"):
+                break
+        
+        if not items:
+            logger.info("La playlist está vacía. No hay nada que limpiar.")
+            return 0, 0
+
+        # 2. Identificar duplicados
+        seen_track_ids = set()
+        duplicates_to_remove = []  # Lista de { "uri": "spotify:track:...", "positions": [index] }
+        
+        # Usamos un diccionario para agrupar posiciones por URI
+        uri_positions = defaultdict(list)
+        for i, item in enumerate(items):
+            track = item.get("track")
+            if track and track.get("uri"):
+                uri_positions[track["uri"]].append(i)
+
+        for uri, positions in uri_positions.items():
+            if len(positions) > 1:
+                # Hay duplicados. Conservamos la primera aparición, eliminamos el resto.
+                for pos in positions[1:]:
+                    duplicates_to_remove.append({"uri": uri, "positions": [pos]})
+
+        if not duplicates_to_remove:
+            logger.info("No se encontraron canciones duplicadas.")
+            return 0, len(items)
+
+        # 3. Eliminar los duplicados
+        logger.info(f"Se encontraron {len(duplicates_to_remove)} canciones duplicadas. Eliminando...")
+        
+        # La API permite eliminar hasta 100 items por llamada.
+        # El formato es una lista de tracks, donde cada track es un diccionario con el URI y las posiciones.
+        # Agrupamos las eliminaciones para ser más eficientes.
+        
+        # Creamos un diccionario para agrupar posiciones por URI para la eliminación
+        tracks_to_remove_payload = defaultdict(list)
+        for dup in duplicates_to_remove:
+            tracks_to_remove_payload[dup['uri']].extend(dup['positions'])
+
+        # Convertimos al formato final que espera la API
+        final_payload = [{"uri": uri, "positions": sorted(positions)} for uri, positions in tracks_to_remove_payload.items()]
+
+        removed_count = 0
+        for i in range(0, len(final_payload), 100):
+            batch = final_payload[i:i+100]
+            sp.playlist_remove_specific_occurrences_of_items(playlist_id, batch)
+            removed_count += sum(len(item['positions']) for item in batch)
+
+        total_remaining = len(items) - removed_count
+        logger.info(f"Limpieza completada. Se eliminaron {removed_count} duplicados. Quedan {total_remaining} canciones.")
+        
+        return removed_count, total_remaining
+
+    except Exception as e:
+        logger.error(f"Error durante la limpieza de duplicados de la playlist {playlist_id}: {e}")
+        return 0, 0
+
+# --------------------------------------------------------------------------------
 # API STATUS
 # --------------------------------------------------------------------------------
 

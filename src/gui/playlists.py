@@ -11,6 +11,7 @@ from ..utils.spotify_utils import (
     crear_playlist as api_crear_playlist,
     unfollow_playlist,
     replace_playlist_items,
+    remove_duplicates_from_playlist,
 )
 
 def ventana_ver_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
@@ -174,4 +175,73 @@ def ventana_vaciar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
             messagebox.showinfo("¡Hecho!", "Las playlists seleccionadas han quedado vacías.")
 
     ttk.Button(frame, text="Vaciar seleccionadas", command=confirmar_vaciado).pack(pady=10)
+    return frame
+
+def ventana_limpiar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+    frame = ttk.Frame(parent, padding=10)
+    frame.rowconfigure(1, weight=1)
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text="Buscar playlists:", font=("Arial", 11)).pack(pady=(10, 0))
+    entry_buscar = ttk.Entry(frame, width=50)
+    entry_buscar.pack(pady=(0, 8), fill="x")
+
+    todas = obtener_playlists_usuario(sp)
+    mostradas = list(todas)
+
+    list_frame = ttk.Frame(frame)
+    list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+    listbox = tk.Listbox(list_frame, selectmode=tk.MULTIPLE, bg="#2a2a2a", fg="white", selectbackground="#1DB954")
+    listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
+    scroll.pack(side=tk.RIGHT, fill=tk.Y)
+    listbox.config(yscrollcommand=scroll.set)
+
+    def refrescar():
+        listbox.delete(0, tk.END)
+        for pid, nombre, _ in mostradas:
+            listbox.insert(tk.END, f"{nombre}  ({pid[:12]}…)")
+
+    def filtrar(_evt):
+        texto = entry_buscar.get().strip().lower()
+        mostradas.clear()
+        for item in todas:
+            if texto in item[1].lower():
+                mostradas.append(item)
+        refrescar()
+
+    entry_buscar.bind("<KeyRelease>", filtrar)
+    refrescar()
+
+    def confirmar_limpieza():
+        idxs = listbox.curselection()
+        if not idxs:
+            messagebox.showwarning("Atención", "No seleccionaste ninguna playlist.")
+            return
+        seleccion = [mostradas[i] for i in idxs]
+        nombres = "\n".join(f"• {n}" for _, n, _ in seleccion)
+        if not messagebox.askyesno("Confirmar limpieza", f"Vas a limpiar estas playlists:\n{nombres}\n\nSe eliminarán las canciones duplicadas. ¿Continuar?"):
+            return
+        
+        resultados = []
+        errores = []
+        for pid, nombre, _ in seleccion:
+            try:
+                eliminados, restantes = remove_duplicates_from_playlist(sp, pid)
+                if eliminados > 0:
+                    resultados.append(f"• {nombre}: {eliminados} duplicados eliminados. Quedan {restantes} canciones.")
+                else:
+                    resultados.append(f"• {nombre}: No se encontraron duplicados.")
+            except Exception as e:
+                errores.append(f"• {nombre}: {e}")
+
+        msg_final = ""
+        if resultados:
+            msg_final += "Limpieza completada:\n" + "\n".join(resultados)
+        if errores:
+            msg_final += "\n\nErrores:\n" + "\n".join(errores)
+        
+        messagebox.showinfo("Resultado de la limpieza", msg_final)
+
+    ttk.Button(frame, text="Limpiar seleccionadas (eliminar duplicados)", command=confirmar_limpieza).pack(pady=10)
     return frame

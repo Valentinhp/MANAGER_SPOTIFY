@@ -70,3 +70,16 @@ def test_real_spotipy_uri_signature_without_network():
     with patch.object(sp,'_post',return_value={'snapshot_id':'test'}) as post:
         add_items(sp,'p',['abc','spotify:episode:def'])
     post.assert_called_once_with('playlists/p/items',payload={'uris':['spotify:track:abc','spotify:episode:def']})
+
+def test_cleanup_keeps_first_occurrence_and_snapshot():
+    from src.utils.spotify_compat import clean_duplicates
+    sp=Mock();sp._get_uri.side_effect=lambda kind,uri:uri
+    sp._get.side_effect=[{'snapshot_id':'snapshot'},{'items':[{'item':{'uri':'spotify:track:a'}},{'item':{'uri':'spotify:episode:b'}},{'item':{'uri':'spotify:track:a'}}],'next':None},{'snapshot_id':'snapshot'}]
+    assert clean_duplicates(sp,'p')==(1,2)
+    sp._put.assert_called_once_with('playlists/p/items',payload={'uris':['spotify:track:a','spotify:episode:b'],'snapshot_id':'snapshot'})
+
+def test_cleanup_does_not_drop_unavailable_items():
+    from src.utils.spotify_compat import clean_duplicates
+    sp=Mock();sp._get.side_effect=[{'snapshot_id':'snapshot'},{'items':[{'item':None}],'next':None}]
+    with pytest.raises(ValueError,match='no disponibles'):clean_duplicates(sp,'p')
+    sp._put.assert_not_called()

@@ -398,7 +398,8 @@ def replace_playlist_items(sp: Spotify, playlist_id: str, items: list):
 # --------------------------------------------------------------------------------
 
 @handle_spotify_errors()
-def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int, int]:
+def _legacy_remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int, int]:
+    # DEPRECATED: positions no aparece en el contrato actual de DELETE /items.
     """
     Elimina canciones duplicadas de una playlist.
 
@@ -485,6 +486,10 @@ def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int,
         raise
 
 # --------------------------------------------------------------------------------
+def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int, int]:
+    from .spotify_compat import clean_duplicates
+    return clean_duplicates(sp, playlist_id)
+
 # API STATUS
 # --------------------------------------------------------------------------------
 

@@ -78,12 +78,44 @@ def remove_items(sp, playlist_id, items, snapshot_id=None):
         snapshot_id = (result or {}).get('snapshot_id')
     return result
 
-def replace_items(sp, playlist_id, uris):
+def replace_items(sp, playlist_id, uris, snapshot_id=None):
     uris = [sp._get_uri('track', uri) for uri in uris]
-    result = _request(sp, '_put', f'playlists/{playlist_id}/items', payload={'uris': uris[:100]})
+    payload = {'uris': uris[:100]}
+    if snapshot_id:
+        payload['snapshot_id'] = snapshot_id
+    result = _request(sp, '_put', f'playlists/{playlist_id}/items', payload=payload)
     if len(uris) > 100:
         result = add_items(sp, playlist_id, uris[100:])
     return result
+
+def clean_duplicates(sp, playlist_id):
+    """Conserva primera aparición y orden; no depende de positions sin documentar."""
+    snapshot = _request(sp, '_get', f'playlists/{playlist_id}', fields='snapshot_id').get('snapshot_id')
+    uris, seen, duplicates, offset = [], set(), 0, 0
+    while True:
+        page = read_items(sp, playlist_id, limit=50, offset=offset)
+        batch = page.get('items') or []
+        for row in batch:
+            track = (row or {}).get('item', (row or {}).get('track'))
+            uri = (track or {}).get('uri')
+            if not uri or uri.startswith('spotify:local:'):
+                raise ValueError('La playlist contiene items locales o no disponibles. No se modificó para conservarlos.')
+            if uri in seen:
+                duplicates += 1
+            else:
+                seen.add(uri); uris.append(uri)
+        if not batch or not page.get('next'):
+            break
+        offset += len(batch)
+    if duplicates:
+        current = _request(sp, '_get', f'playlists/{playlist_id}', fields='snapshot_id').get('snapshot_id')
+        if current != snapshot:
+            raise RuntimeError('La playlist cambió durante la lectura. Vuelve a intentar la limpieza.')
+        try:
+            replace_items(sp, playlist_id, uris, snapshot)
+        except Exception as error:
+            raise RuntimeError('No se completó la limpieza. Revisa el contenido de la playlist antes de reintentar.') from error
+    return duplicates, len(uris)
 
 def remove_from_library(sp, uris):
     result = None

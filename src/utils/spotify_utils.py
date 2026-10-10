@@ -92,12 +92,15 @@ def add_episodes_to_playlist(sp: Spotify, playlist_id: str, episode_uris: List[s
 def obtener_playlists_usuario(sp: Spotify) -> List[Tuple[str, str, int]]:
     """[(playlist_id, nombre, total_tracks)…]"""
     playlists, offset = [], 0
+    seen = set()
     while True:
         res = sp.current_user_playlists(limit=50, offset=offset)
-        playlists += [
-            (it["id"], it["name"], (it.get("items") or it.get("tracks") or {}).get("total", 0))
-            for it in res.get("items", [])
-        ]
+        for it in res.get("items", []):
+            if not it or not it.get('id') or it['id'] in seen:
+                continue
+            seen.add(it['id'])
+            playlists.append((it['id'], it.get('name') or 'Sin nombre',
+                (it.get('items') or it.get('tracks') or {}).get('total', 0)))
         if not res.get("next"):
             break
         offset += 50

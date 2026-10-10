@@ -1,6 +1,17 @@
 from unittest.mock import Mock,patch
 import threading
 import pytest
+
+def test_playlist_pages_can_overlap_without_duplicate_ids():
+    from src.utils.spotify_utils import obtener_playlists_usuario
+    sp = Mock()
+    first = {'id': 'one', 'name': 'Primera', 'tracks': {'total': 3}}
+    second = {'id': 'two', 'name': 'Segunda', 'items': {'total': 4}}
+    sp.current_user_playlists.side_effect = [
+        {'items': [first], 'next': 'page2'},
+        {'items': [first, None, second], 'next': None},
+    ]
+    assert obtener_playlists_usuario(sp) == [('one', 'Primera', 3), ('two', 'Segunda', 4)]
 from spotipy.exceptions import SpotifyException
 from src.utils.spotify_compat import search_paginated,create_playlist,read_items,add_items,remove_items,cached_entities,remove_from_library
 from src.utils.api_decorator import handle_spotify_errors,SpotifyAccessError

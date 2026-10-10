@@ -31,7 +31,8 @@ def playlist_view(parent,sp,action='ver'):
         tree.delete(*tree.get_children())
         text=query.get().casefold()
         for pid,name,count in rows:
-            if text in name.casefold():tree.insert('','end',iid=pid,values=(name,count,pid))
+            if text in name.casefold() and not tree.exists(pid):
+                tree.insert('','end',iid=pid,values=(name,count,pid))
     def loaded(values):rows[:]=values;render()
     def refresh():run_job(frame,lambda:obtener_playlists_usuario(sp),loaded,controls=(refresh_button,))
     def operate():

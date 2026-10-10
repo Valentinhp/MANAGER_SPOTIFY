@@ -101,7 +101,12 @@ def assignments_view(parent,sp,kind='artist',sync_only=False):
         selected={int(i) for i in tree.selection()}
         rows=[dict(r) for i,r in enumerate(state['rows']) if all_rows or i in selected]
         if not rows:return messagebox.showinfo('Selección','Selecciona asignaciones para sincronizar.',parent=frame)
-        status.configure(text='Sincronizando…')
+        counter={'added':0}
+        unit='canciones' if is_artist else 'episodios'
+        status.configure(text=f'Sincronizando · 0 {unit} nuevos agregados')
+        def added(count):
+            counter['added']+=count
+            status.configure(text=f'Sincronizando · {counter["added"]} {unit} nuevos agregados')
         def work():
             reports=[]
             for index,row in enumerate(rows):
@@ -128,10 +133,11 @@ def assignments_view(parent,sp,kind='artist',sync_only=False):
                 report_progress(index+1,len(rows),f'{index+1}/{len(rows)} asignaciones procesadas · {label}')
             return reports
         def done(reports):
-            status.configure(text='Sincronización finalizada')
+            summary=f'Total: {counter["added"]} {unit} nuevos agregados'
+            status.configure(text=f'Sincronización finalizada · {summary}')
             progress.finish(f'{len(rows)}/{len(rows)} asignaciones procesadas; revisa el resultado de cada una')
-            messagebox.showinfo('Resultado','\n'.join(reports),parent=frame)
-        run_job(frame,work,done,controls=controls,on_progress=progress.update_progress)
+            messagebox.showinfo('Resultado',summary+'\n\n'+'\n'.join(reports),parent=frame)
+        run_job(frame,work,done,controls=controls,on_progress=progress.update_progress,on_added=added)
     bar=ctk.CTkFrame(frame);bar.pack(padx=15,pady=10,fill='x')
     for label,action in [('Eliminar asignación',delete),('Sincronizar seleccionadas',lambda:synchronize()),('Sincronizar todas',lambda:synchronize(True))]:
         button=ctk.CTkButton(bar,text=label,command=action)

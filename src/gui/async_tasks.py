@@ -2,9 +2,9 @@
 import queue
 import threading
 from tkinter import messagebox
-from ..utils.progress import progress_reporter
+from ..utils.progress import progress_reporter,addition_reporter
 
-def run_job(frame, work, on_success, on_error=None, controls=(), on_progress=None):
+def run_job(frame, work, on_success, on_error=None, controls=(), on_progress=None, on_added=None):
     root = frame.winfo_toplevel()
     results = queue.Queue()
     for control in controls:
@@ -14,7 +14,7 @@ def run_job(frame, work, on_success, on_error=None, controls=(), on_progress=Non
 
     def worker():
         try:
-            with progress_reporter(lambda done, total, text: results.put(('progress', (done, total, text)))):
+            with progress_reporter(lambda done, total, text: results.put(('progress', (done, total, text)))), addition_reporter(lambda count: results.put(('added', count))):
                 value = work()
             results.put((True, value))
         except Exception as error:
@@ -30,6 +30,9 @@ def run_job(frame, work, on_success, on_error=None, controls=(), on_progress=Non
                 break
             if success == 'progress':
                 latest = value
+            elif success == 'added':
+                if frame.winfo_exists() and on_added:
+                    on_added(value)
             else:
                 completed = (success, value)
                 break

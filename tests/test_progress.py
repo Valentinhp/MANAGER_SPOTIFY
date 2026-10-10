@@ -2,7 +2,7 @@ import threading
 import time
 from unittest.mock import Mock
 import pytest
-from src.utils.progress import progress_reporter,progress_range,report_progress
+from src.utils.progress import progress_reporter,progress_range,report_progress,addition_reporter,report_added
 from src.utils.spotify_compat import add_items
 from src.utils.playlist_names import resolve_playlist_names,playlist_label
 from src.gui.async_tasks import run_job
@@ -24,8 +24,10 @@ def test_batch_progress_only_counts_successful_writes():
     sp._get_uri.side_effect=lambda kind,uri:uri
     sp._post.side_effect=[{'snapshot_id':'one'},RuntimeError('failed')]
     updates=[]
-    with progress_reporter(lambda *args:updates.append(args)):
+    added=[]
+    with progress_reporter(lambda *args:updates.append(args)),addition_reporter(added.append):
         with pytest.raises(RuntimeError):add_items(sp,'playlist',['spotify:track:'+str(i) for i in range(205)])
+    assert added==[100]
     assert max(done for done,_,_ in updates)==100
     assert all(total==205 for _,total,_ in updates)
 
@@ -70,10 +72,12 @@ def test_worker_progress_is_delivered_on_main_thread_and_ignores_closed_frame(al
     def work():
         assert threading.get_ident()!=main_thread
         report_progress(1,2,'Primera playlist')
+        report_added(2)
         worker_done.set()
         return 'done'
     run_job(root,work,lambda value:callbacks.append(('success',value)),
-            on_progress=lambda *args:callbacks.append((threading.get_ident(),args)))
+            on_progress=lambda *args:callbacks.append((threading.get_ident(),args)),
+            on_added=lambda count:callbacks.append((threading.get_ident(),count)))
     assert worker_done.wait(2)
     root.alive=alive
     deadline=time.monotonic()+2
@@ -84,6 +88,7 @@ def test_worker_progress_is_delivered_on_main_thread_and_ignores_closed_frame(al
     assert all(thread_id==main_thread for thread_id,_ in root.progress)
     if alive:
         assert callbacks[-1]==('success','done')
+        assert (main_thread,2) in callbacks
         assert any(item[0]==main_thread for item in callbacks)
     else:
         assert not callbacks

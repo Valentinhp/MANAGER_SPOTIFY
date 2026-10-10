@@ -5,7 +5,7 @@ from unittest.mock import Mock,patch
 import customtkinter as ctk
 from tkinter import ttk
 from src.gui.modern_assignments import assignments_view
-from src.utils.progress import report_progress
+from src.utils.progress import report_progress,report_added
 
 
 def descendants(widget):
@@ -49,6 +49,7 @@ def main():
             report_progress(1,2,'Agregando elementos')
             time.sleep(.12)
             report_progress(2,2,'Elementos agregados')
+            report_added(2)
             return 2
         with patch('src.gui.modern_assignments.load_assignments',return_value=rows), \
              patch('src.gui.modern_assignments.save_assignments'), \
@@ -72,6 +73,7 @@ def main():
             assert any(0<done<total for done,total,_ in events if total)
             assert events[-1][0]==events[-1][1]==2
             assert reports and 'Música para trabajar' in reports[-1] and 'Charlas favoritas' in reports[-1]
+            assert 'Total: 4' in reports[-1]
             assert button.cget('state')=='normal'
         frame.destroy()
     root.destroy()

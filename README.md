@@ -60,6 +60,7 @@ El modo anterior de API sigue disponible solo si configuras explícitamente `AI_
 - Podcasts: buscar y asignar podcasts a playlists; sincronizar episodios evitando duplicados.
 - Asignaciones de artistas: administrar y sincronizar canciones nuevas.
 - Progreso: las sincronizaciones de artistas y podcasts muestran porcentaje, asignación actual y playlist de destino. La lectura de episodios y las cargas por lotes informan elementos procesados. Las operaciones de playlists tienen barra propia; búsquedas e IA también actualizan el indicador general. Si el total aún no se conoce, se muestra actividad sin inventar un porcentaje.
+- Contador de nuevos elementos: durante la sincronización se muestran las canciones o episodios realmente agregados y el total final. Solo cuentan lotes confirmados por Spotify; ante un fallo parcial se conserva lo que sí se agregó.
 - Nombres de playlists: las asignaciones antiguas y el historial consultan los nombres reales de Spotify; los resultados de creación, sincronización y limpieza incluyen el nombre. Si una playlist ya no está disponible, se conserva su nombre guardado o se indica la falta de acceso junto al ID.
 - Radio de Ánimo: generar hasta 15 sugerencias, revisar título/artista y estado de coincidencia, excluir canciones con doble clic y crear solo al pulsar Crear playlist.
 - IA: sugerir nombre y descripción, pedir otras 15 excluyendo sugerencias previas, ordenar con arco de energía y refinar mediante chat. El chat conserva las últimas 20 intervenciones para limitar el contexto.

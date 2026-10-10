@@ -4,7 +4,7 @@ import time
 from copy import deepcopy
 from collections import OrderedDict
 from .api_decorator import handle_spotify_errors
-from .progress import report_progress
+from .progress import report_progress,report_added
 
 _cache = OrderedDict()
 _lock = threading.Lock()
@@ -71,6 +71,7 @@ def add_items(sp, playlist_id, uris):
     for start in range(0, len(uris), 100):
         report_progress(start, len(uris), f'Agregando elementos: {start}/{len(uris)}')
         result = _request(sp, '_post', f'playlists/{playlist_id}/items', payload={'uris': uris[start:start+100]})
+        report_added(len(uris[start:start+100]))
         report_progress(min(start+100,len(uris)), len(uris), f'Elementos agregados: {min(start+100,len(uris))}/{len(uris)}')
     return result
 

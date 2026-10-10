@@ -3,6 +3,23 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 _reporter = ContextVar('job_progress', default=None)
+_added_reporter = ContextVar('job_added', default=None)
+
+
+def report_added(count):
+    """Cuenta únicamente escrituras confirmadas por Spotify."""
+    callback = _added_reporter.get()
+    if callback and count > 0:
+        callback(count)
+
+
+@contextmanager
+def addition_reporter(callback):
+    token = _added_reporter.set(callback)
+    try:
+        yield
+    finally:
+        _added_reporter.reset(token)
 
 
 def report_progress(done=0, total=None, message='Procesando…'):

@@ -98,7 +98,7 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
         request=text+(f' Hora local: {datetime.now().strftime("%H:%M")}' if hour.get() else '')
         order='arco' if arc.get() else 'normal'
         exclusions=list(state['suggested']) if more else []
-        history=list(state['history']) if chat else None
+        history=list(state['history'][-20:]) if chat else None
         status.configure(text='Generando y buscando canciones…')
         def work():
             songs=recomendar_canciones(request,excluir=exclusions,orden=order,historial=history)
@@ -133,12 +133,13 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
             return messagebox.showinfo('Ya creada',f'Esta generación ya creó la playlist {state["playlist"]}.',parent=frame)
         rows=[dict(r) for r in state['rows']]
         title,desc,is_public=name.get(),description.get(),public.get()
+        generation=state['generation']
         def work():
             playlist=build_playlist(sp,title,desc,rows,is_public)
             # Return the successful remote result even if local history cannot be updated.
             warning=None
             try:
-                attach_playlist(state['generation'],playlist['id'])
+                attach_playlist(generation,playlist['id'])
             except Exception as error:
                 warning=str(error)
             return playlist,warning

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import pytest
 from src.utils.ai_recommender import AIError, parse_songs, recomendar_canciones
+import anthropic
 from src.utils.ai_playlist_builder import match_score, resolve_suggestions, find_track
 
 SONG = {'title': 'Canción', 'artist': 'Artista'}
@@ -37,3 +38,15 @@ def test_invalid_response_retried_once():
         assert recomendar_canciones('tranquilo') == [SONG]
     assert client.messages.create.call_count == 2
     client.close.assert_called_once()
+
+def test_missing_key_does_not_call_api():
+    with patch('src.utils.ai_recommender.ANTHROPIC_API_KEY',''),patch('src.utils.ai_recommender.anthropic.Anthropic') as factory:
+        with pytest.raises(AIError,match='ANTHROPIC_API_KEY'):recomendar_canciones('test')
+        factory.assert_not_called()
+
+def test_json_is_not_retried_more_than_once():
+    client=Mock()
+    client.messages.create.return_value=SimpleNamespace(content=[SimpleNamespace(type='text',text='invalid')])
+    with patch('src.utils.ai_recommender.ANTHROPIC_API_KEY','test'),patch('src.utils.ai_recommender.anthropic.Anthropic',return_value=client):
+        with pytest.raises(AIError):recomendar_canciones('test')
+    assert client.messages.create.call_count==2

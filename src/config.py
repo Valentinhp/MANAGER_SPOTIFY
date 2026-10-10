@@ -12,7 +12,9 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 #: Credenciales
 CLIENT_ID: str = os.getenv("CLIENT_ID", "")
 CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "")
-REDIRECT_URI: str = os.getenv("REDIRECT_URI", "http://localhost:8888/callback")
+REDIRECT_URI: str = os.getenv("REDIRECT_URI", "http://127.0.0.1:8888/callback")
+ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+AI_MODEL: str = os.getenv("AI_MODEL", "claude-sonnet-5-5")
 
 #: Alcances Spotify
 SCOPES: str = (

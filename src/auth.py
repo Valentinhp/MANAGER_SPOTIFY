@@ -10,4 +10,4 @@ def get_spotify_client() -> spotipy.Spotify:
         redirect_uri=REDIRECT_URI,
         scope=SCOPES,
     )
-    return spotipy.Spotify(auth_manager=auth_manager, requests_timeout=30, retries=3)
+    return spotipy.Spotify(auth_manager=auth_manager, requests_timeout=30, retries=0, status_retries=0)

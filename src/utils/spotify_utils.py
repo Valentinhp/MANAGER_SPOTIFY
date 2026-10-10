@@ -21,16 +21,8 @@ logger = logging.getLogger(__name__)
 # Decorador para manejo de errores (asumiendo que lo tienes definido en otro lugar)
 # from .api_decorator import handle_spotify_errors
 # Si no, define un decorador dummy para que el código corra:
-def handle_spotify_errors():
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                logger.error(f"Error en {func.__name__}: {e}")
-                return None
-        return wrapper
-    return decorator
+from .api_decorator import handle_spotify_errors
+from .spotify_compat import (search_paginated, cached_entities, create_playlist, read_items, add_items, remove_items, replace_items, remove_from_library)
 
 
 def _normalize_str(s: str) -> str:
@@ -63,7 +55,7 @@ def get_playlist_items(sp: Spotify, playlist_id: str) -> Optional[List[str]]:
     """Devuelve URIs (track o episode) que ya existen en la playlist."""
     items, offset = [], 0
     while True:
-        resp = sp.playlist_items(playlist_id, limit=100, offset=offset)
+        resp = read_items(sp, playlist_id, limit=100, offset=offset)
         batch = resp.get("items", [])
         if not batch:
             break
@@ -91,7 +83,7 @@ def add_episodes_to_playlist(sp: Spotify, playlist_id: str, episode_uris: List[s
         return
 
     for i in range(0, len(nuevos), 100):
-        sp.playlist_add_items(playlist_id, nuevos[i:i + 100])
+        add_items(sp, playlist_id, nuevos[i:i + 100])
     
     logger.info("Agregados %s episodios nuevos a %s", len(nuevos), playlist_id)
 
@@ -102,7 +94,7 @@ def obtener_playlists_usuario(sp: Spotify) -> List[Tuple[str, str, int]]:
     while True:
         res = sp.current_user_playlists(limit=50, offset=offset)
         playlists += [
-            (it["id"], it["name"], it["tracks"]["total"])
+            (it["id"], it["name"], (it.get("items") or it.get("tracks") or {}).get("total", 0))
             for it in res.get("items", [])
         ]
         if not res.get("next"):
@@ -112,13 +104,12 @@ def obtener_playlists_usuario(sp: Spotify) -> List[Tuple[str, str, int]]:
 
 @handle_spotify_errors()
 def crear_playlist(sp: Spotify, nombre_playlist: str, public: bool = False) -> str:
-    user_id = sp.me()["id"]
-    nueva = sp.user_playlist_create(user_id, name=nombre_playlist, public=public)
+    nueva = create_playlist(sp, nombre_playlist, public=public)
     return nueva["id"]
 
 @handle_spotify_errors()
 def eliminar_items_playlist(sp: Spotify, playlist_id: str, uris: List[str]) -> None:
-    sp.playlist_remove_all_occurrences_of_items(playlist_id, uris)
+    remove_items(sp, playlist_id, [{"uri": uri} for uri in uris])
     logger.info("Eliminados %s items de %s", len(uris), playlist_id)
 
 @handle_spotify_errors()
@@ -128,7 +119,7 @@ def obtener_contenido_playlist(
     """[(track_id, nombre, artista/show)]"""
     contenido, offset = [], 0
     while True:
-        resp = sp.playlist_items(playlist_id, limit=50, offset=offset)
+        resp = read_items(sp, playlist_id, limit=50, offset=offset)
         for it in resp.get("items", []):
             track = it.get("track")
             if not track:
@@ -143,7 +134,7 @@ def obtener_contenido_playlist(
             contenido.append((tid, nombre, artista_show))
         if not resp.get("next"):
             break
-        offset += 50
+        offset += len(resp.get("items", []))
     return contenido
 
 @handle_spotify_errors()
@@ -152,7 +143,7 @@ def get_playlist_track_ids(sp: Spotify, playlist_id: str) -> Optional[Set[str]]:
     track_ids = set()
     offset = 0
     while True:
-        resp = sp.playlist_items(playlist_id, limit=100, offset=offset, fields="items(track(id)),next")
+        resp = read_items(sp, playlist_id, limit=100, offset=offset, fields="items(track(id)),next")
         items = resp.get("items", [])
         if not items:
             break
@@ -171,7 +162,7 @@ def obtener_artistas_seguidos(sp: Spotify):
     datos = sp.current_user_followed_artists()
     while datos:
         for art in datos["artists"]["items"]:
-            genero = art["genres"][0] if art["genres"] else ""
+            genero = (art.get("genres") or [""])[0]
             artistas.append((art["id"], art["name"], genero))
         if datos["artists"]["next"]:
             datos = sp.next(datos["artists"])
@@ -185,7 +176,7 @@ def obtener_podcasts_guardados(sp: Spotify):
     datos = sp.current_user_saved_shows()
     for it in datos.get("items", []):
         show = it["show"]
-        podcasts.append((show["id"], show["name"], show["publisher"]))
+        podcasts.append((show["id"], show["name"], show.get("publisher", "")))
     return podcasts
 
 # --------------------------------------------------------------------------------
@@ -262,15 +253,15 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
                 for i in range(0, len(track_ids_to_fetch), 50):
                     batch_ids = track_ids_to_fetch[i:i+50]
                     if not batch_ids: continue
-                    full_track_details = sp.tracks(batch_ids)
+                    full_track_details = cached_entities(sp, "track", batch_ids)
                     all_tracks_raw.extend(t for t in full_track_details['tracks'] if t)
         except Exception as e:
             logger.warning(f"Error procesando {album_type} para {artist_name}: {e}")
 
     logger.info("2/3 - Obteniendo top tracks...")
     try:
-        top_tracks = sp.artist_top_tracks(artista_id)
-        all_tracks_raw.extend(top_tracks.get('tracks', []))
+        top_tracks = search_paginated(sp, f'artist:"{artist_name}"', 'track', 50)
+        all_tracks_raw.extend(top_tracks.get('tracks', {}).get('items', []))
     except Exception as e:
         logger.warning(f"Error obteniendo top tracks: {e}")
 
@@ -290,7 +281,7 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
     for query in search_queries:
         try:
             logger.info(f"    -> Buscando con query: {query}")
-            initial_search = sp.search(q=query, type='track', limit=50)
+            initial_search = search_paginated(sp, query, 'track', 200)
             search_tracks = _get_all_pages(sp, initial_search)
             all_tracks_raw.extend(search_tracks)
             time.sleep(0.1) # Pequeña pausa para no saturar la API
@@ -326,7 +317,7 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
             final_tracks.append(track_group[0])
             continue
 
-        track_group.sort(key=lambda t: t.get('popularity', 0), reverse=True)
+        track_group.sort(key=lambda t: (t.get('album', {}).get('release_date', ''), t.get('duration_ms', 0)), reverse=True)
         final_tracks.append(track_group[0])
         
         added_uris = {track_group[0]['uri']}
@@ -367,7 +358,7 @@ def agregar_canciones_a_playlist(sp: Spotify, playlist_id: str, tracks: List[dic
     for i in range(0, len(new_track_uris), 100):
         batch = new_track_uris[i:i + 100]
         try:
-            sp.playlist_add_items(playlist_id, batch)
+            add_items(sp, playlist_id, batch)
             added_count += len(batch)
         except Exception as e:
             logger.error(f"Error agregando lote a la playlist: {e}")
@@ -387,14 +378,14 @@ def buscar_artistas(sp: Spotify, query: str) -> List[Tuple[str, str]]:
 @handle_spotify_errors()
 def unfollow_playlist(sp: Spotify, playlist_id: str):
     """Unfollows a playlist."""
-    sp.current_user_unfollow_playlist(playlist_id)
+    remove_from_library(sp, [f"spotify:playlist:{playlist_id}"])
     logger.info(f"Unfollowed playlist {playlist_id}")
     return True
 
 @handle_spotify_errors()
 def replace_playlist_items(sp: Spotify, playlist_id: str, items: list):
     """Replaces all items in a playlist."""
-    sp.playlist_replace_items(playlist_id, items)
+    replace_items(sp, playlist_id, items)
     logger.info(f"Replaced items in playlist {playlist_id}")
     return True
 
@@ -425,7 +416,7 @@ def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int,
         items = []
         offset = 0
         while True:
-            resp = sp.playlist_items(playlist_id, limit=100, offset=offset, fields="items(track(id,uri)),next")
+            resp = read_items(sp, playlist_id, limit=100, offset=offset, fields="items(track(id,uri)),next")
             batch = resp.get("items", [])
             if not batch:
                 break
@@ -477,7 +468,7 @@ def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int,
         removed_count = 0
         for i in range(0, len(final_payload), 100):
             batch = final_payload[i:i+100]
-            sp.playlist_remove_specific_occurrences_of_items(playlist_id, batch)
+            remove_items(sp, playlist_id, batch)
             removed_count += sum(len(item['positions']) for item in batch)
 
         total_remaining = len(items) - removed_count
@@ -524,17 +515,17 @@ def get_current_user(sp: Spotify):
 @handle_spotify_errors()
 def search(sp: Spotify, q: str, type: str, limit: int):
     """Performs a search."""
-    return sp.search(q=q, type=type, limit=limit)
+    return search_paginated(sp, q, type, limit)
 
 @handle_spotify_errors()
 def user_playlist_create(sp: Spotify, user: str, name: str, public: bool, description: str):
     """Creates a playlist."""
-    return sp.user_playlist_create(user, name, public=public, description=description)
+    return create_playlist(sp, name, public=public, description=description)
 
 @handle_spotify_errors()
 def playlist_add_items(sp: Spotify, playlist_id: str, items: list):
     """Adds items to a playlist."""
-    return sp.playlist_add_items(playlist_id, items)
+    return add_items(sp, playlist_id, items)
 
 @handle_spotify_errors()
 def current_user_playlists(sp: Spotify, limit: int = 50, offset: int = 0):
@@ -544,7 +535,7 @@ def current_user_playlists(sp: Spotify, limit: int = 50, offset: int = 0):
 @handle_spotify_errors()
 def playlist_items(sp: Spotify, playlist_id: str, fields: Optional[str] = None, limit: int = 100, offset: int = 0):
     """Gets items from a playlist."""
-    return sp.playlist_items(playlist_id, fields=fields, limit=limit, offset=offset)
+    return read_items(sp, playlist_id, fields=fields, limit=limit, offset=offset)
 
 @handle_spotify_errors()
 def next_page(sp: Spotify, result: dict):
@@ -554,9 +545,10 @@ def next_page(sp: Spotify, result: dict):
     return None
 
 @handle_spotify_errors()
-def recommendations(sp: Spotify, seed_genres: list, limit: int, country: str):
+def recommendations(sp: Spotify, seed_genres: list, limit: int, country: str = "US", **kwargs):
     """Get recommendations based on seed genres."""
-    return sp.recommendations(seed_genres=seed_genres, limit=limit, country=country)
+    # DEPRECATED: endpoint no disponible en Modo Desarrollo.
+    raise NotImplementedError("Usa ai_recommender")
 
 @handle_spotify_errors()
 def show(sp: Spotify, show_id: str, market: str):
@@ -571,12 +563,12 @@ def playlist(sp: Spotify, playlist_id: str, fields: Optional[str] = None):
 @handle_spotify_errors()
 def artists(sp: Spotify, artist_ids: list):
     """Get information about several artists."""
-    return sp.artists(artist_ids)
+    return cached_entities(sp, "artist", artist_ids)
 
 @handle_spotify_errors()
 def tracks(sp: Spotify, track_ids: list):
     """Get information about several tracks."""
-    return sp.tracks(track_ids)
+    return cached_entities(sp, "track", track_ids)
 
 @handle_spotify_errors()
 def artist_albums(sp: Spotify, artist_id: str, album_type: Optional[str] = None, country: Optional[str] = None, limit: int = 20, offset: int = 0):

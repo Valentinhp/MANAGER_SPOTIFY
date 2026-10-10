@@ -3,9 +3,14 @@ import threading
 import time
 from copy import deepcopy
 from collections import OrderedDict
+from .api_decorator import handle_spotify_errors
 
 _cache = OrderedDict()
 _lock = threading.Lock()
+
+@handle_spotify_errors()
+def _request(sp, method, path, **kwargs):
+    return getattr(sp, method)(path, **kwargs)
 
 def search_paginated(sp, q, type, total, offset=0):
     if type not in ('track', 'artist', 'album', 'playlist', 'show', 'episode', 'audiobook'):
@@ -43,13 +48,13 @@ def cached_entities(sp, kind, ids):
     return {kind+'s': values}
 
 def create_playlist(sp, name, public=False, description=''):
-    return sp._post('me/playlists', payload={'name': name, 'public': public, 'description': description})
+    return _request(sp, '_post', 'me/playlists', payload={'name': name, 'public': public, 'description': description})
 
 def read_items(sp, playlist_id, fields=None, limit=50, offset=0):
     params = {'limit': min(limit, 50), 'offset': offset, 'additional_types': 'track,episode'}
     if fields:
         params['fields'] = fields.replace('track(', 'item(')
-    result = sp._get(f'playlists/{playlist_id}/items', **params)
+    result = _request(sp, '_get', f'playlists/{playlist_id}/items', **params)
     for row in result.get('items') or []:
         if row:
             row['track'] = row.get('item', row.get('track'))
@@ -59,7 +64,7 @@ def add_items(sp, playlist_id, uris):
     uris = [sp._get_uri(uri, 'track') for uri in uris]
     result = None
     for start in range(0, len(uris), 100):
-        result = sp._post(f'playlists/{playlist_id}/items', payload={'uris': uris[start:start+100]})
+        result = _request(sp, '_post', f'playlists/{playlist_id}/items', payload={'uris': uris[start:start+100]})
     return result
 
 def remove_items(sp, playlist_id, items, snapshot_id=None):
@@ -69,16 +74,19 @@ def remove_items(sp, playlist_id, items, snapshot_id=None):
         payload = {'items': items[start:start+100]}
         if snapshot_id:
             payload['snapshot_id'] = snapshot_id
-        result = sp._delete(f'playlists/{playlist_id}/items', payload=payload)
+        result = _request(sp, '_delete', f'playlists/{playlist_id}/items', payload=payload)
         snapshot_id = (result or {}).get('snapshot_id')
     return result
 
 def replace_items(sp, playlist_id, uris):
     uris = [sp._get_uri(uri, 'track') for uri in uris]
-    result = sp._put(f'playlists/{playlist_id}/items', payload={'uris': uris[:100]})
+    result = _request(sp, '_put', f'playlists/{playlist_id}/items', payload={'uris': uris[:100]})
     if len(uris) > 100:
         result = add_items(sp, playlist_id, uris[100:])
     return result
 
 def remove_from_library(sp, uris):
-    return sp._delete('me/library', uris=','.join(uris))
+    result = None
+    for start in range(0, len(uris), 40):
+        result = _request(sp, '_delete', 'me/library', uris=','.join(uris[start:start+40]))
+    return result

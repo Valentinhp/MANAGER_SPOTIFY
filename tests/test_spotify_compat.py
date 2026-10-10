@@ -53,3 +53,13 @@ def test_429_waits_on_worker_and_retries():
 def test_balanced_merge_keeps_order_and_removes_duplicates():
     def song(i):return {'id':str(i),'uri':f'spotify:track:{i}'}
     assert [t['id'] for t in balanced_merge([song(1),song(2),song(3)],[song(4),song(1)])]==['1','4','2','3']
+
+def test_add_retry_does_not_repeat_successful_batch():
+    sp=Mock();sp._get_uri.side_effect=lambda uri,kind:uri
+    sp._post.side_effect=[{'snapshot_id':'first'},SpotifyException(429,-1,'limited',headers={'Retry-After':'0'}),{'snapshot_id':'second'}]
+    output=[]
+    with patch('src.utils.api_decorator.time.sleep'):
+        thread=threading.Thread(target=lambda:output.append(add_items(sp,'p',[str(i) for i in range(150)])))
+        thread.start();thread.join(timeout=3)
+    assert output==[{'snapshot_id':'second'}]
+    assert [len(call.kwargs['payload']['uris']) for call in sp._post.call_args_list]==[100,50,50]

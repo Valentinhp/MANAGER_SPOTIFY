@@ -21,6 +21,11 @@ def test_matching_requires_both_fields():
     assert match_score(SONG, TRACK) == 1
     assert match_score(SONG, {**TRACK, 'artists': [{'name': 'XYZ'}]}) < 0.6
 
+def test_non_latin_titles_do_not_collapse_to_empty_strings():
+    suggestion={'title':'東京','artist':'歌手'}
+    unrelated={'name':'大阪','artists':[{'name':'歌手'}]}
+    assert match_score(suggestion,unrelated)<0.6
+
 def test_fallback_and_duplicate():
     sp = Mock()
     sp.search.side_effect = [{'tracks': {'items': []}}, {'tracks': {'items': [TRACK]}}]

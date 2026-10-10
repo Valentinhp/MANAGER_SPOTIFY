@@ -27,7 +27,8 @@ from .spotify_compat import (search_paginated, cached_entities, create_playlist,
 
 def _normalize_str(s: str) -> str:
     """Normaliza un string: quita acentos, a minúsculas y espacios extra."""
-    s = unicodedata.normalize('NFD', s.lower()).encode('ascii', 'ignore').decode('utf-8')
+    s = ''.join(character for character in unicodedata.normalize('NFD', s.casefold())
+                if not unicodedata.combining(character))
     return ' '.join(s.split())
 
 # --------------------------------------------------------------------------------

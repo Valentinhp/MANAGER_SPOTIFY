@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import pytest
 from src.utils.ai_recommender import AIError, parse_songs, recomendar_canciones
-import anthropic
 from src.utils.ai_playlist_builder import match_score, resolve_suggestions, find_track
 
 SONG = {'title': 'Canción', 'artist': 'Artista'}
@@ -36,22 +35,36 @@ def test_fallback_and_duplicate():
     assert [r['selected'] for r in rows] == [True, False]
 
 def test_invalid_response_retried_once():
-    response = lambda text: SimpleNamespace(content=[SimpleNamespace(type='text', text=text)])
+    response = lambda text: SimpleNamespace(output_text=text, status='completed')
     client = Mock()
-    client.messages.create.side_effect = [response('invalid'), response(json.dumps([SONG]))]
-    with patch('src.utils.ai_recommender.ANTHROPIC_API_KEY', 'test'), patch('src.utils.ai_recommender.anthropic.Anthropic', return_value=client):
+    client.responses.create.side_effect = [response('invalid'), response(json.dumps([SONG]))]
+    with patch('src.utils.ai_recommender.OPENAI_API_KEY', 'test'), patch('src.utils.ai_recommender.openai.OpenAI', return_value=client):
         assert recomendar_canciones('tranquilo') == [SONG]
-    assert client.messages.create.call_count == 2
+    assert client.responses.create.call_count == 2
+    request = client.responses.create.call_args_list[0].kwargs
+    assert request['store'] is False
+    assert request['max_output_tokens'] == 4096
+    assert len(request['input']) == 1
+    assert len(client.responses.create.call_args_list[1].kwargs['input']) == 3
     client.close.assert_called_once()
 
 def test_missing_key_does_not_call_api():
-    with patch('src.utils.ai_recommender.ANTHROPIC_API_KEY',''),patch('src.utils.ai_recommender.anthropic.Anthropic') as factory:
-        with pytest.raises(AIError,match='ANTHROPIC_API_KEY'):recomendar_canciones('test')
+    with patch('src.utils.ai_recommender.OPENAI_API_KEY',''),patch('src.utils.ai_recommender.openai.OpenAI') as factory:
+        with pytest.raises(AIError,match='OPENAI_API_KEY'):recomendar_canciones('test')
         factory.assert_not_called()
 
 def test_json_is_not_retried_more_than_once():
     client=Mock()
-    client.messages.create.return_value=SimpleNamespace(content=[SimpleNamespace(type='text',text='invalid')])
-    with patch('src.utils.ai_recommender.ANTHROPIC_API_KEY','test'),patch('src.utils.ai_recommender.anthropic.Anthropic',return_value=client):
+    client.responses.create.return_value=SimpleNamespace(output_text='invalid', status='completed')
+    with patch('src.utils.ai_recommender.OPENAI_API_KEY','test'),patch('src.utils.ai_recommender.openai.OpenAI',return_value=client):
         with pytest.raises(AIError):recomendar_canciones('test')
-    assert client.messages.create.call_count==2
+    assert client.responses.create.call_count==2
+
+def test_incomplete_response_is_not_used_or_retried():
+    client = Mock()
+    client.responses.create.return_value = SimpleNamespace(status='incomplete', output_text='{"songs":')
+    with patch('src.utils.ai_recommender.OPENAI_API_KEY', 'test'), patch('src.utils.ai_recommender.openai.OpenAI', return_value=client):
+        with pytest.raises(AIError, match='no completó'):
+            recomendar_canciones('tranquilo')
+    client.responses.create.assert_called_once()
+    client.close.assert_called_once()

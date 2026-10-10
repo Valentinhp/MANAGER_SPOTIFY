@@ -1,6 +1,6 @@
 # SpotyVManager
 
-Aplicación de escritorio en Python y CustomTkinter para organizar playlists, podcasts y asignaciones de artistas. Incluye sugerencias musicales de Claude, vista previa y creación de playlists con Spotify. Proyecto independiente, no oficial de Spotify.
+Aplicación de escritorio en Python y CustomTkinter para organizar playlists, podcasts y asignaciones de artistas. Incluye sugerencias musicales de OpenAI, vista previa y creación de playlists con Spotify. Proyecto independiente, no oficial de Spotify.
 
 ## Instalación local
 
@@ -24,16 +24,16 @@ En Linux/macOS usa `.venv/bin/python`; algunas distribuciones Linux requieren in
 1. Entra al [Developer Dashboard](https://developer.spotify.com/dashboard) y crea una aplicación con acceso a Web API. Cada persona que instale su propia copia debe crear su propio Client ID y Client Secret.
 2. En Settings registra exactamente `http://127.0.0.1:8888/callback`. Spotify exige una IP loopback explícita; `localhost` no está permitido. [Redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
 3. Copia `.env.example` a `.env` si todavía no tienes uno. Conserva tu archivo existente si ya contiene credenciales.
-4. Completa `CLIENT_ID` y `CLIENT_SECRET`. Añade `ANTHROPIC_API_KEY` para activar IA; las funciones normales de Spotify no la necesitan.
-5. `AI_MODEL=claude-sonnet-5-5` es configurable. El identificador aparece en la [documentación de modelos de Anthropic](https://platform.claude.com/docs/en/models/overview). La API de Anthropic requiere acceso y saldo propios.
+4. Completa `CLIENT_ID` y `CLIENT_SECRET`. Añade `OPENAI_API_KEY` para activar IA; las funciones normales de Spotify no la necesitan.
+5. `AI_MODEL=gpt-5-mini` es configurable. El identificador aparece en la [documentación de modelos de OpenAI](https://developers.openai.com/api/docs/models/gpt-5-mini). La API de OpenAI requiere una clave y facturación propias; la suscripción de ChatGPT no incluye el uso de la API. Crea la clave en https://platform.openai.com/api-keys y colócala únicamente en tu archivo .env local.
 6. En Users Management agrega los usuarios de prueba. En Modo Desarrollo el propietario de la app debe mantener Premium y hay hasta 5 usuarios autorizados; quienes no estén en la lista pueden autenticarse pero recibirán 403. [Quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). La actualización de julio permite hasta 25 Client IDs por desarrollador y comparte cuotas por cuenta; el límite antiguo de un Client ID ya no es vigente. [Changelog de julio de 2026](https://developer.spotify.com/documentation/web-api/references/changes/july-2026).
 
 ```dotenv
 CLIENT_ID=tu_client_id
 CLIENT_SECRET=tu_nuevo_client_secret
 REDIRECT_URI=http://127.0.0.1:8888/callback
-ANTHROPIC_API_KEY=tu_key_de_anthropic
-AI_MODEL=claude-sonnet-5-5
+OPENAI_API_KEY=tu_key_de_openai
+AI_MODEL=gpt-5-mini
 ```
 
 ```powershell
@@ -54,10 +54,10 @@ Spotify abre el navegador para autorizar al realizar la primera operación que n
 - IA: sugerir nombre y descripción, pedir otras 15 excluyendo sugerencias previas, ordenar con arco de energía y refinar mediante chat. El chat conserva las últimas 20 intervenciones para limitar el contexto.
 - Hora/clima: preparar una solicitud con la hora del sistema y una descripción opcional del clima escrita por ti. No requiere otra API ni transmite ubicación.
 - Historial local: consultar solicitudes, canciones sugeridas y la playlist creada.
-- Resumen del gusto: Claude genera un perfil a partir de tu descripción escrita.
+- Resumen del gusto: OpenAI genera un perfil a partir de tu descripción escrita.
 - Fusión: selecciona dos playlists propias, revisa su combinación y crea una tercera intercalada, sin duplicados.
 
-La política de Spotify prohíbe tanto entrenar modelos como ingresar contenido de Spotify a modelos de IA. Por ello Claude recibe exclusivamente texto del usuario y sugerencias previas generadas por Claude: no recibe metadatos obtenidos de Spotify, portadas, historial de escucha ni playlists. La fusión se calcula localmente; el perfil utiliza tu descripción en lugar de analizar automáticamente tus artistas seguidos o Top Tracks. [Developer Policy, III.13–14](https://developer.spotify.com/policy).
+La política de Spotify prohíbe tanto entrenar modelos como ingresar contenido de Spotify a modelos de IA. Por ello OpenAI recibe exclusivamente texto del usuario y sugerencias previas generadas por OpenAI: no recibe metadatos obtenidos de Spotify, portadas, historial de escucha ni playlists. La fusión se calcula localmente; el perfil utiliza tu descripción en lugar de analizar automáticamente tus artistas seguidos o Top Tracks. [Developer Policy, III.13–14](https://developer.spotify.com/policy).
 
 ## Compatibilidad de Spotify
 
@@ -87,7 +87,7 @@ HTTP 429 respeta `Retry-After` en segundo plano y limita reintentos; 403 muestra
 El código activo está en `src/`. Se consolidaron 39 asignaciones del directorio duplicado; sus respaldos están en `local_backups/`, excluido de Git. Los módulos de UI anteriores se conservan con `# DEPRECATED`; sus entradas públicas dirigen a las vistas modernas.
 
 - `src/utils/spotify_compat.py`: contratos actuales y normalización de respuestas.
-- `src/utils/ai_recommender.py` y `ai_playlist_builder.py`: Claude y matching de títulos/artistas, sin confundir sugerencias con resultados confirmados.
+- `src/utils/ai_recommender.py` y `ai_playlist_builder.py`: OpenAI y matching de títulos/artistas, sin confundir sugerencias con resultados confirmados.
 - `src/gui/async_tasks.py`: workers con `threading.Thread` y `queue.Queue`; todos los widgets se actualizan en el hilo de Tk.
 - `src/gui/main_modern.py`, `modern_*.py` y `ai_*.py`: sidebar y pantallas.
 - `data/`: asignaciones JSON e historial de IA. La primera ejecución de una vista de asignaciones migra los datos existentes de `src/` sin borrarlos.

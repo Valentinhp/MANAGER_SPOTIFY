@@ -1,6 +1,6 @@
 ﻿spotipy==2.26.0
 python-dotenv>=1.0.1,<2
-anthropic>=0.75,<1
+openai>=2,<3
 customtkinter==5.2.2
 pillow>=11,<13
 requests>=2.32.4,<3

@@ -19,8 +19,8 @@ CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "")
 REDIRECT_URI: str = os.getenv("REDIRECT_URI", "http://127.0.0.1:8888/callback")
 if REDIRECT_URI.startswith('http://localhost:'):
     REDIRECT_URI = REDIRECT_URI.replace('http://localhost:', 'http://127.0.0.1:', 1)
-ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-AI_MODEL: str = os.getenv("AI_MODEL", "claude-sonnet-5-5")
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+AI_MODEL: str = os.getenv("AI_MODEL", "gpt-5-mini")
 
 #: Alcances Spotify
 SCOPES: str = (

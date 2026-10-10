@@ -14,6 +14,8 @@ def main():
     for name in archive.toc:
         assert name.replace('\\','/').split('/')[-1] not in ('.env','.cache'),f'Archivo privado incluido: {name}'
     pyz=archive.open_embedded_archive(next(name for name in archive.toc if name.endswith('.pyz')))
+    assert 'openai' in pyz.toc, 'Falta el SDK de OpenAI en el ejecutable'
+    assert not any(module == 'anthropic' or module.startswith('anthropic.') for module in pyz.toc), 'El ejecutable conserva el SDK anterior'
     count=0
     for module in pyz.toc:
         if module=='src':path=Path('src/__init__.py')

@@ -1,8 +1,8 @@
-"""Claude recibe solo instrucciones del usuario y sugerencias de Claude."""
+"""OpenAI recibe solo instrucciones del usuario y sugerencias de OpenAI."""
 import json
 import re
-import anthropic
-from ..config import ANTHROPIC_API_KEY, AI_MODEL
+import openai
+from ..config import OPENAI_API_KEY, AI_MODEL
 
 class AIError(RuntimeError):
     pass
@@ -36,16 +36,18 @@ def parse_songs(text):
     return result
 
 def _request(messages, parser):
-    if not ANTHROPIC_API_KEY:
-        raise AIError('Falta ANTHROPIC_API_KEY en tu archivo .env. Reinicia la app tras agregarla.')
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=45, max_retries=0)
+    if not OPENAI_API_KEY:
+        raise AIError('Falta OPENAI_API_KEY en tu archivo .env. Reinicia la app tras agregarla.')
+    client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=45, max_retries=0)
     conversation = [dict(message) for message in messages]
     try:
         for attempt in range(2):
-            response = client.messages.create(model=AI_MODEL, max_tokens=4096,
-                system='Eres un curador musical. Sigue las instrucciones del usuario. Devuelve únicamente JSON, sin Markdown.',
-                messages=conversation)
-            text = ''.join(block.text for block in response.content if getattr(block, 'type', '') == 'text')
+            response = client.responses.create(model=AI_MODEL, max_output_tokens=4096,
+                instructions='Eres un curador musical. Sigue las instrucciones del usuario. Devuelve únicamente JSON, sin Markdown.',
+                input=[dict(message) for message in conversation], store=False)
+            if response.status != 'completed':
+                raise AIError('OpenAI no completó la respuesta. Intenta de nuevo o revisa AI_MODEL.')
+            text = response.output_text
             try:
                 return parser(text)
             except AIError:
@@ -53,16 +55,16 @@ def _request(messages, parser):
                     raise
                 conversation.extend([{'role': 'assistant', 'content': text},
                     {'role': 'user', 'content': 'Corrige tu respuesta: devuelve JSON válido con el esquema solicitado.'}])
-    except anthropic.AuthenticationError as error:
-        raise AIError('Anthropic rechazó la API key. Revisa ANTHROPIC_API_KEY.') from error
-    except anthropic.RateLimitError as error:
-        raise AIError('Anthropic alcanzó su límite de peticiones. Intenta más tarde.') from error
-    except anthropic.APITimeoutError as error:
+    except openai.AuthenticationError as error:
+        raise AIError('OpenAI rechazó la API key. Revisa OPENAI_API_KEY.') from error
+    except openai.RateLimitError as error:
+        raise AIError('OpenAI alcanzó su límite de peticiones. Intenta más tarde.') from error
+    except openai.APITimeoutError as error:
         raise AIError('La IA tardó demasiado. Intenta de nuevo.') from error
-    except anthropic.APIConnectionError as error:
-        raise AIError('No se pudo conectar a Anthropic.') from error
-    except anthropic.APIStatusError as error:
-        raise AIError(f'Anthropic devolvió HTTP {error.status_code}. Revisa modelo, saldo y acceso.') from error
+    except openai.APIConnectionError as error:
+        raise AIError('No se pudo conectar a OpenAI.') from error
+    except openai.APIStatusError as error:
+        raise AIError(f'OpenAI devolvió HTTP {error.status_code}. Revisa modelo, saldo y acceso.') from error
     finally:
         client.close()
 

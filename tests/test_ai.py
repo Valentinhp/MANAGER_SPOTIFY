@@ -48,6 +48,24 @@ def test_invalid_response_retried_once():
     assert len(client.responses.create.call_args_list[1].kwargs['input']) == 3
     client.close.assert_called_once()
 
+@pytest.mark.parametrize('body,message', [
+    ({'code': 'insufficient_quota'}, 'cuota disponible'),
+    ({'code': 'credit_balance_exhausted', 'type': 'insufficient_quota'}, 'cuota disponible'),
+    ({'error': {'type': 'insufficient_quota'}}, 'cuota disponible'),
+    ({'code': 'rate_limit_exceeded'}, 'límite de peticiones'),
+])
+def test_quota_and_request_limits_have_distinct_messages(body, message):
+    import httpx
+    import openai
+    client = Mock()
+    response = httpx.Response(429, request=httpx.Request('POST', 'https://api.openai.com/v1/responses'))
+    client.responses.create.side_effect = openai.RateLimitError('Limit', response=response, body=body)
+    with patch('src.utils.ai_recommender.OPENAI_API_KEY', 'test'), patch('src.utils.ai_recommender.openai.OpenAI', return_value=client):
+        with pytest.raises(AIError, match=message):
+            recomendar_canciones('tranquilo')
+    client.responses.create.assert_called_once()
+    client.close.assert_called_once()
+
 def test_missing_key_does_not_call_api():
     with patch('src.utils.ai_recommender.OPENAI_API_KEY',''),patch('src.utils.ai_recommender.openai.OpenAI') as factory:
         with pytest.raises(AIError,match='OPENAI_API_KEY'):recomendar_canciones('test')

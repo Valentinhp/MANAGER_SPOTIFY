@@ -58,6 +58,11 @@ def _request(messages, parser):
     except openai.AuthenticationError as error:
         raise AIError('OpenAI rechazó la API key. Revisa OPENAI_API_KEY.') from error
     except openai.RateLimitError as error:
+        body = error.body if isinstance(error.body, dict) else {}
+        details = body.get('error', body)
+        details = details if isinstance(details, dict) else {}
+        if details.get('code') == 'insufficient_quota' or details.get('type') == 'insufficient_quota':
+            raise AIError('OpenAI no tiene cuota disponible para esta clave (429). Revisa saldo y límites de facturación en https://platform.openai.com/settings/organization/billing/overview. El plan de ChatGPT se gestiona por separado.') from error
         raise AIError('OpenAI alcanzó su límite de peticiones. Intenta más tarde.') from error
     except openai.APITimeoutError as error:
         raise AIError('La IA tardó demasiado. Intenta de nuevo.') from error

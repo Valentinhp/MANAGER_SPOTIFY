@@ -21,6 +21,7 @@ if REDIRECT_URI.startswith('http://localhost:'):
     REDIRECT_URI = REDIRECT_URI.replace('http://localhost:', 'http://127.0.0.1:', 1)
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 AI_MODEL: str = os.getenv("AI_MODEL", "gpt-5-mini")
+AI_PROVIDER: str = os.getenv("AI_PROVIDER", "chatgpt").strip().lower()
 
 #: Alcances Spotify
 SCOPES: str = (

@@ -1,12 +1,14 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from .async_tasks import run_job
+from .chatgpt_controls import chatgpt_controls
 from ..utils.ai_recommender import resumir_gusto
 
 def ventana_ai_profile(parent, sp):
     frame=ctk.CTkFrame(parent)
     ctk.CTkLabel(frame,text='Resumen de tu gusto',font=('Segoe UI',24,'bold')).pack(pady=15)
     ctk.CTkLabel(frame,text='Describe tus gustos con tus propias palabras. Solo este texto se envía a OpenAI.').pack(padx=20,pady=10)
+    chatgpt_controls(frame).pack(fill='x',padx=20,pady=5)
     entry=ctk.CTkTextbox(frame,height=140)
     entry.pack(fill='x',padx=20,pady=10)
     result=ctk.CTkTextbox(frame)

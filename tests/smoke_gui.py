@@ -18,7 +18,7 @@ def main():
     sp.current_user_playlists.side_effect=response({'items':[],'next':None})
     sp._get.side_effect=response({'items':[],'next':None})
     failures=[]
-    with tempfile.TemporaryDirectory() as directory, patch('src.utils.assignments.DATA_DIR',Path(directory)),patch('src.utils.ai_history.HISTORY_FILE',Path(directory)/'ai_history.json'),patch('tkinter.messagebox.showerror',side_effect=lambda *args,**kwargs:failures.append(args)):
+    with tempfile.TemporaryDirectory() as directory, patch('src.utils.assignments.DATA_DIR',Path(directory)),patch('src.utils.ai_history.HISTORY_FILE',Path(directory)/'ai_history.json'),patch('src.utils.chatgpt_session.SESSION_PATH',Path(directory)/'chatgpt-session.bin'),patch('tkinter.messagebox.showerror',side_effect=lambda *args,**kwargs:failures.append(args)):
         root=build_main_window(sp,smoke=True)
         root.report_callback_exception=lambda *args:failures.append(args)
         pages=[main_modern.ventana_ai_mood,main_modern.ventana_ai_chat,main_modern.ventana_ver_playlists,main_modern.ventana_crear_playlist,

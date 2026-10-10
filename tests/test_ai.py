@@ -8,6 +8,11 @@ from src.utils.ai_playlist_builder import match_score, resolve_suggestions, find
 SONG = {'title': 'Canción', 'artist': 'Artista'}
 TRACK = {'id': 'abc', 'uri': 'spotify:track:abc', 'name': 'Cancion', 'artists': [{'name': 'Artista'}]}
 
+@pytest.fixture(autouse=True)
+def api_provider_for_existing_tests():
+    with patch('src.utils.ai_recommender.AI_PROVIDER', 'openai'):
+        yield
+
 def test_json_fences_and_duplicates():
     assert parse_songs('```json\n'+json.dumps({'songs': [SONG, SONG]})+'\n```') == [SONG]
 

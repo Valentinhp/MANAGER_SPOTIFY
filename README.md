@@ -22,18 +22,17 @@ En Linux/macOS usa `.venv/bin/python`; algunas distribuciones Linux requieren in
 ## Spotify y .env
 
 1. Entra al [Developer Dashboard](https://developer.spotify.com/dashboard) y crea una aplicación con acceso a Web API. Cada persona que instale su propia copia debe crear su propio Client ID y Client Secret.
-2. En Settings registra exactamente `http://127.0.0.1:8888/callback`. Spotify exige una IP loopback explícita; `localhost` no está permitido. [Redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+2. En Settings registra exactamente `http://127.0.0.1:5000/callback` y usa esa misma dirección en `.env`. Spotify exige una IP loopback explícita; `localhost` no está permitido. [Redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
 3. Copia `.env.example` a `.env` si todavía no tienes uno. Conserva tu archivo existente si ya contiene credenciales.
-4. Completa `CLIENT_ID` y `CLIENT_SECRET`. Añade `OPENAI_API_KEY` para activar IA; las funciones normales de Spotify no la necesitan.
-5. `AI_MODEL=gpt-5-mini` es configurable. El identificador aparece en la [documentación de modelos de OpenAI](https://developers.openai.com/api/docs/models/gpt-5-mini). La API de OpenAI requiere una clave y facturación propias; la suscripción de ChatGPT no incluye el uso de la API. Crea la clave en https://platform.openai.com/api-keys y colócala únicamente en tu archivo .env local.
+4. Completa `CLIENT_ID` y `CLIENT_SECRET`. Para IA deja `AI_PROVIDER=chatgpt`: no requiere `OPENAI_API_KEY`.
+5. Abre Radio de Ánimo, Chat musical o Resumen de gusto, pulsa **Continue with ChatGPT** y permite usar tu plan en el navegador. Después selecciona un modelo disponible y genera automáticamente. El acceso depende de la elegibilidad de tu cuenta y sus límites. [Conexión oficial al plan](https://developers.openai.com/siwc/token-sharing-open-source).
 6. En Users Management agrega los usuarios de prueba. En Modo Desarrollo el propietario de la app debe mantener Premium y hay hasta 5 usuarios autorizados; quienes no estén en la lista pueden autenticarse pero recibirán 403. [Quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). La actualización de julio permite hasta 25 Client IDs por desarrollador y comparte cuotas por cuenta; el límite antiguo de un Client ID ya no es vigente. [Changelog de julio de 2026](https://developer.spotify.com/documentation/web-api/references/changes/july-2026).
 
 ```dotenv
 CLIENT_ID=tu_client_id
 CLIENT_SECRET=tu_nuevo_client_secret
-REDIRECT_URI=http://127.0.0.1:8888/callback
-OPENAI_API_KEY=tu_key_de_openai
-AI_MODEL=gpt-5-mini
+REDIRECT_URI=http://127.0.0.1:5000/callback
+AI_PROVIDER=chatgpt
 ```
 
 ```powershell
@@ -41,6 +40,16 @@ AI_MODEL=gpt-5-mini
 ```
 
 Spotify abre el navegador para autorizar al realizar la primera operación que necesita autenticación. Reinicia la app después de editar `.env`. Si cambias Client ID o permisos, conserva como respaldo y elimina tu caché OAuth local para autorizar de nuevo.
+
+## IA automática con tu plan de ChatGPT
+
+El inicio de sesión oficial solicita permiso para usar tu plan; no accede al historial de tus conversaciones ni toma la sesión de Codex. La primera conexión se completa en el navegador. La app conserva la sesión, renueva los tokens y descubre los modelos permitidos para tu cuenta. **Opciones** permite añadir o cambiar cuentas, actualizar modelos, cerrar sesión y abrir el uso del plan. Los límites compartidos y por aplicación se administran en [ChatGPT → Uso](https://chatgpt.com/settings/usage).
+
+Este modo envía las solicitudes mediante OAuth al endpoint público de Responses, con streaming y sin almacenamiento remoto de respuestas. Espera la confirmación de respuesta completa antes de utilizar canciones sugeridas. Si faltan permisos, tu cuenta no es elegible o alcanzas un límite, muestra el error; **no cambia automáticamente a la API de pago**. [Modelos e inferencia](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [limitaciones](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
+La sesión está en `data/chatgpt-session.bin`, excluida de Git y del ejecutable. En Windows se cifra con DPAPI para tu usuario; en Unix se guarda con permisos `0600`. Cada registro mantiene su propia cuenta y cliente. Los tokens se renuevan bajo bloqueo entre procesos y se escriben de forma atómica. Al cerrar sesión se intenta revocar el acceso remoto; si no se confirma, la app indica cómo revocarlo desde ChatGPT.
+
+El modo anterior de API sigue disponible solo si configuras explícitamente `AI_PROVIDER=openai`, `OPENAI_API_KEY` y `AI_MODEL` en `.env`. Ese modo tiene facturación separada del plan de ChatGPT.
 
 **Seguridad:** `.env` y `.cache` estuvieron versionados. Regenera el Client Secret en Spotify, revoca tokens anteriores y actualiza `.env`. Quitarlos del índice no elimina las versiones del historial. No compartas estos archivos. La limpieza del historial con `git filter-repo` sería un trabajo separado que requiere coordinar las copias existentes; no se reescribió el historial.
 

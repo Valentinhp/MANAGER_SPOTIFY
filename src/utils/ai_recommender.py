@@ -2,7 +2,8 @@
 import json
 import re
 import openai
-from ..config import OPENAI_API_KEY, AI_MODEL
+from ..config import OPENAI_API_KEY, AI_MODEL, AI_PROVIDER
+from . import chatgpt_session
 
 class AIError(RuntimeError):
     pass
@@ -35,19 +36,57 @@ def parse_songs(text):
             seen.add(key)
     return result
 
+def _response_text(client, model, conversation, use_plan):
+    options = dict(model=model,
+        instructions='Eres un curador musical. Sigue las instrucciones del usuario. Devuelve únicamente JSON, sin Markdown.',
+        input=[dict(message) for message in conversation], store=False)
+    if not use_plan:
+        response = client.responses.create(**options, max_output_tokens=4096)
+        if response.status != 'completed':
+            raise AIError('OpenAI no completó la respuesta. Intenta de nuevo o revisa AI_MODEL.')
+        return response.output_text
+    parts, completed = [], False
+    with client.responses.create(**options, stream=True) as stream:
+        for event in stream:
+            if event.type == 'response.output_text.delta':
+                parts.append(event.delta)
+            elif event.type == 'response.completed':
+                completed = True
+            elif event.type == 'response.failed':
+                code = getattr(event.response.error, 'code', '')
+                raise AIError(_plan_error(code))
+            elif event.type in ('response.incomplete', 'error'):
+                raise AIError('ChatGPT no completó la respuesta. Intenta de nuevo.')
+    if not completed:
+        raise AIError('Se interrumpió la respuesta de ChatGPT. Intenta de nuevo.')
+    return ''.join(parts)
+
+
+def _plan_error(code):
+    if code == 'subscription_sharing_usage_limit_exceeded':
+        return 'Llegaste al límite de uso de ChatGPT para esta app. Revisa https://chatgpt.com/settings/usage.'
+    if code == 'subscription_sharing_user_not_eligible':
+        return 'Tu cuenta o espacio de trabajo no permite usar el plan de ChatGPT en esta app.'
+    if code in ('subscription_sharing_usage_unavailable', 'subscription_sharing_user_unavailable'):
+        return 'ChatGPT no pudo comprobar el uso del plan. Intenta más tarde.'
+    return 'ChatGPT rechazó la solicitud. Revisa tu conexión y los permisos del plan.'
+
+
 def _request(messages, parser):
-    if not OPENAI_API_KEY:
+    if AI_PROVIDER not in ('chatgpt', 'openai'):
+        raise AIError('AI_PROVIDER debe ser chatgpt u openai en .env.')
+    use_plan = AI_PROVIDER == 'chatgpt'
+    if not use_plan and not OPENAI_API_KEY:
         raise AIError('Falta OPENAI_API_KEY en tu archivo .env. Reinicia la app tras agregarla.')
-    client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=45, max_retries=0)
+    try:
+        key, model = chatgpt_session.inference_credentials() if use_plan else (OPENAI_API_KEY, AI_MODEL)
+    except chatgpt_session.ChatGPTError as error:
+        raise AIError(str(error)) from error
+    client = openai.OpenAI(api_key=key, base_url='https://api.openai.com/v1', timeout=90, max_retries=0)
     conversation = [dict(message) for message in messages]
     try:
         for attempt in range(2):
-            response = client.responses.create(model=AI_MODEL, max_output_tokens=4096,
-                instructions='Eres un curador musical. Sigue las instrucciones del usuario. Devuelve únicamente JSON, sin Markdown.',
-                input=[dict(message) for message in conversation], store=False)
-            if response.status != 'completed':
-                raise AIError('OpenAI no completó la respuesta. Intenta de nuevo o revisa AI_MODEL.')
-            text = response.output_text
+            text = _response_text(client, model, conversation, use_plan)
             try:
                 return parser(text)
             except AIError:
@@ -56,11 +95,15 @@ def _request(messages, parser):
                 conversation.extend([{'role': 'assistant', 'content': text},
                     {'role': 'user', 'content': 'Corrige tu respuesta: devuelve JSON válido con el esquema solicitado.'}])
     except openai.AuthenticationError as error:
+        if use_plan:
+            raise AIError('ChatGPT rechazó la sesión. Pulsa Continue with ChatGPT para reconectar.') from error
         raise AIError('OpenAI rechazó la API key. Revisa OPENAI_API_KEY.') from error
     except openai.RateLimitError as error:
         body = error.body if isinstance(error.body, dict) else {}
         details = body.get('error', body)
         details = details if isinstance(details, dict) else {}
+        if use_plan:
+            raise AIError(_plan_error(details.get('code', 'subscription_sharing_usage_limit_exceeded'))) from error
         if details.get('code') == 'insufficient_quota' or details.get('type') == 'insufficient_quota':
             raise AIError('OpenAI no tiene cuota disponible para esta clave (429). Revisa saldo y límites de facturación en https://platform.openai.com/settings/organization/billing/overview. El plan de ChatGPT se gestiona por separado.') from error
         raise AIError('OpenAI alcanzó su límite de peticiones. Intenta más tarde.') from error
@@ -69,6 +112,11 @@ def _request(messages, parser):
     except openai.APIConnectionError as error:
         raise AIError('No se pudo conectar a OpenAI.') from error
     except openai.APIStatusError as error:
+        if use_plan:
+            body = error.body if isinstance(error.body, dict) else {}
+            details = body.get('error', body)
+            code = details.get('code', '') if isinstance(details, dict) else ''
+            raise AIError(f'{_plan_error(code)} (HTTP {error.status_code})') from error
         raise AIError(f'OpenAI devolvió HTTP {error.status_code}. Revisa modelo, saldo y acceso.') from error
     finally:
         client.close()

@@ -4,6 +4,7 @@ from datetime import datetime
 from tkinter import ttk, messagebox
 import customtkinter as ctk
 from .async_tasks import run_job
+from .chatgpt_controls import chatgpt_controls
 from ..utils.ai_recommender import recomendar_canciones, sugerir_nombre_playlist
 from ..utils.ai_playlist_builder import resolve_suggestions, build_playlist
 from ..utils.ai_history import save_generation, attach_playlist
@@ -12,7 +13,7 @@ from ..utils.covers import load_cover
 def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
     frame = ctk.CTkFrame(parent, fg_color='#121212')
     frame.grid_columnconfigure(0, weight=1)
-    frame.grid_rowconfigure(5, weight=1)
+    frame.grid_rowconfigure(6, weight=1)
     ctk.CTkLabel(frame, text='Chat musical' if chat else '✨ Radio de Ánimo (IA)', font=('Segoe UI', 24, 'bold')).grid(row=0, column=0, padx=20, pady=12, sticky='w')
     prompt = ctk.CTkEntry(frame, placeholder_text='Una noche tranquila, indie mexicano, sin reggaetón…')
     prompt.grid(row=1, column=0, padx=20, pady=5, sticky='ew')
@@ -24,14 +25,15 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
     hour = ctk.BooleanVar(value=False)
     ctk.CTkCheckBox(options, text='Arco de energía', variable=arc).pack(side='left', padx=10, pady=8)
     ctk.CTkCheckBox(options, text='Usar hora local', variable=hour).pack(side='left', padx=10)
+    chatgpt_controls(frame).grid(row=3, column=0, padx=20, pady=5, sticky='ew')
     transcript = ctk.CTkTextbox(frame, height=90)
     if chat:
-        transcript.grid(row=3, column=0, padx=20, pady=5, sticky='ew')
+        transcript.grid(row=4, column=0, padx=20, pady=5, sticky='ew')
         transcript.configure(state='disabled')
     tools = ctk.CTkFrame(frame)
-    tools.grid(row=4, column=0, padx=20, pady=5, sticky='ew')
+    tools.grid(row=5, column=0, padx=20, pady=5, sticky='ew')
     preview = ctk.CTkFrame(frame)
-    preview.grid(row=5, column=0, padx=20, pady=5, sticky='nsew')
+    preview.grid(row=6, column=0, padx=20, pady=5, sticky='nsew')
     preview.grid_columnconfigure(0, weight=1)
     preview.grid_rowconfigure(0, weight=1)
     tree = ttk.Treeview(preview, columns=('use', 'title', 'artist', 'status'), show='headings', selectmode='browse')
@@ -45,7 +47,7 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
     cover = ctk.CTkLabel(preview, text='Portada')
     cover.grid(row=0,column=2,padx=10)
     details = ctk.CTkFrame(frame)
-    details.grid(row=6,column=0,padx=20,pady=5,sticky='ew')
+    details.grid(row=7,column=0,padx=20,pady=5,sticky='ew')
     name = ctk.CTkEntry(details, placeholder_text='Nombre de playlist', width=250)
     name.insert(0,'Radio de Ánimo')
     name.pack(side='left',padx=5,pady=8)
@@ -54,7 +56,7 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
     public = ctk.BooleanVar(value=False)
     ctk.CTkCheckBox(details,text='Pública',variable=public,width=90).pack(side='left',padx=5)
     status = ctk.CTkLabel(frame,text='Selecciona canciones con doble clic. Spotify proporciona los resultados y portadas.')
-    status.grid(row=8,column=0,padx=20,pady=8,sticky='w')
+    status.grid(row=9,column=0,padx=20,pady=8,sticky='w')
     state = {'rows': [], 'suggested': [], 'history': [], 'generation': None, 'playlist': None, 'cover_token': 0}
     controls = []
 

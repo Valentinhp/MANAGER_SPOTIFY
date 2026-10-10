@@ -1,3 +1,4 @@
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
 from spotipy import Spotify
@@ -6,7 +7,7 @@ import os
 from .assign_artist import ventana_asignar_artista_playlist
 from ..config import logger
 
-DATA_FILE = "SPOTYVMANAGER/SPOTYVMANAGER/src/data_assignments.json"
+DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
 class VentanaGestionarAsignaciones(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):

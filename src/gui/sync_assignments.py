@@ -1,3 +1,4 @@
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
 from spotipy import Spotify
@@ -7,7 +8,7 @@ import threading
 import logging
 from ..utils.spotify_utils import obtener_canciones_artista, agregar_canciones_a_playlist
 
-DATA_FILE = "SPOTYVMANAGER/SPOTYVMANAGER/src/data_assignments.json"
+DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
 class VentanaSincronizarAsignaciones(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):

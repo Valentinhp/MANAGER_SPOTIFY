@@ -1,3 +1,4 @@
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from spotipy import Spotify
@@ -12,7 +13,7 @@ from ..utils.spotify_utils import (
 )
 from ..config import logger
 
-DATA_FILE = "SPOTYVMANAGER/SPOTYVMANAGER/src/data_assignments.json"
+DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
 def ventana_asignar_artista_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     """Frame para buscar un artista, asignarlo a una playlist y sincronizar."""

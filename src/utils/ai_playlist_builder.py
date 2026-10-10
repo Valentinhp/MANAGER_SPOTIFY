@@ -3,6 +3,7 @@ from difflib import SequenceMatcher
 from .spotify_utils import _normalize_str, user_playlist_create, playlist_add_items, search
 
 logger = logging.getLogger(__name__)
+from .progress import report_progress
 
 def match_score(suggestion, track):
     title = SequenceMatcher(None, _normalize_str(suggestion['title']), _normalize_str(track.get('name', ''))).ratio()
@@ -24,13 +25,15 @@ def find_track(sp, suggestion, threshold=0.6):
 
 def resolve_suggestions(sp, suggestions):
     rows, seen = [], set()
-    for suggestion in suggestions:
+    for index,suggestion in enumerate(suggestions):
+        report_progress(index,len(suggestions),f'Buscando {index+1}/{len(suggestions)}: {suggestion["title"]} — {suggestion["artist"]}')
         track = find_track(sp, suggestion)
         duplicate = bool(track and track['id'] in seen)
         if track:
             seen.add(track['id'])
         rows.append({'suggestion': suggestion, 'track': track, 'selected': bool(track and not duplicate),
             'status': 'Duplicada' if duplicate else 'Encontrada' if track else 'No encontrada'})
+        report_progress(index+1,len(suggestions),f'{index+1}/{len(suggestions)} canciones comprobadas')
     return rows
 
 def build_playlist(sp, name, description, rows, public=False):
@@ -41,5 +44,5 @@ def build_playlist(sp, name, description, rows, public=False):
     try:
         playlist_add_items(sp, playlist['id'], uris)
     except Exception as error:
-        raise RuntimeError(f'Se creó la playlist {playlist["id"]}, pero falló al agregar canciones. Revisa esa playlist antes de volver a crearla.') from error
+        raise RuntimeError(f'Se creó la playlist «{playlist.get("name") or name}» ({playlist["id"]}), pero falló al agregar canciones. Revisa esa playlist antes de volver a crearla.') from error
     return playlist

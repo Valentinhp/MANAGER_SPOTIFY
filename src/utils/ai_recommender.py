@@ -4,6 +4,7 @@ import re
 import openai
 from ..config import OPENAI_API_KEY, AI_MODEL, AI_PROVIDER
 from . import chatgpt_session
+from .progress import report_progress
 
 class AIError(RuntimeError):
     pass
@@ -86,6 +87,7 @@ def _request(messages, parser):
     conversation = [dict(message) for message in messages]
     try:
         for attempt in range(2):
+            report_progress(message='ChatGPT está preparando las sugerencias…' if use_plan else 'OpenAI está preparando las sugerencias…')
             text = _response_text(client, model, conversation, use_plan)
             try:
                 return parser(text)

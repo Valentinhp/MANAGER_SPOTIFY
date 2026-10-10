@@ -1,6 +1,9 @@
 import customtkinter as ctk
 from tkinter import ttk,messagebox,simpledialog
 from .async_tasks import run_job
+from .job_progress import JobProgress
+from ..utils.progress import report_progress,progress_range
+from ..utils.playlist_names import resolve_playlist_names,playlist_label
 from ..utils.assignments import load_assignments,save_assignments
 from ..utils.spotify_utils import (search,obtener_playlists_usuario,crear_playlist,obtener_canciones_artista,
     agregar_canciones_a_playlist,get_podcast_episodes,get_playlist_items,playlist_add_items,obtener_artistas_seguidos,obtener_podcasts_guardados)
@@ -57,18 +60,38 @@ def assignments_view(parent,sp,kind='artist',sync_only=False):
             state['rows'].append(row);save_assignments(state['rows'],kind);render()
         assign_button=ctk.CTkButton(frame,text='Asignar a playlist',command=assign)
         assign_button.pack(pady=5);controls.append(assign_button)
-        refresh_playlists()
     tree=ttk.Treeview(frame,columns=('source','playlist'),show='headings',selectmode='extended')
     tree.heading('source',text='Artista' if is_artist else 'Podcast');tree.heading('playlist',text='Playlist')
     tree.pack(fill='both',expand=True,padx=15,pady=10)
     status=ctk.CTkLabel(frame,text='Listo');status.pack(pady=5)
+    progress=JobProgress(frame);progress.pack(fill='x',padx=15,pady=5)
     def render():
         tree.delete(*tree.get_children())
         for i,row in enumerate(state['rows']):
             source=row.get('artista_nombre',row.get('podcast_nombre',row.get('podcast','')))
-            dest=row.get('playlist_nombre',row.get('playlist_id',row.get('playlist','')))
+            dest=playlist_label(row.get('playlist_id',row.get('playlist','')),saved=row.get('playlist_nombre'))
             tree.insert('','end',iid=str(i),values=(source,dest))
-    def loaded(rows):state['rows']=rows;render()
+    def load_view():
+        rows=[dict(row) for row in load_assignments(kind)]
+        try:catalog=obtener_playlists_usuario(sp)
+        except Exception:catalog=[]
+        names=resolve_playlist_names(sp,[row.get('playlist_id',row.get('playlist')) for row in rows],
+            known={pid:name for pid,name,_ in catalog})
+        for row in rows:
+            pid=row.get('playlist_id',row.get('playlist'))
+            if pid in names:row['playlist_nombre']=names[pid]
+            if not is_artist and not row.get('podcast_nombre'):
+                try:
+                    value=sp.show(row['podcast']).get('name')
+                    if isinstance(value,str) and value.strip():row['podcast_nombre']=value
+                except Exception:pass
+        save_assignments(rows,kind)
+        return rows,catalog
+    def loaded(value):
+        rows,catalog=value
+        state['rows']=rows;render()
+        if not sync_only:playlists_loaded(catalog)
+        progress.finish(f'{len(rows)} asignaciones cargadas')
     def delete():
         selected={int(i) for i in tree.selection()}
         if selected:
@@ -81,25 +104,37 @@ def assignments_view(parent,sp,kind='artist',sync_only=False):
         status.configure(text='Sincronizando…')
         def work():
             reports=[]
-            for row in rows:
+            for index,row in enumerate(rows):
+                source=row.get('artista_nombre') or row.get('podcast_nombre') or row.get('artista_id',row.get('podcast',''))
+                destination=playlist_label(row.get('playlist_id',row.get('playlist')),saved=row.get('playlist_nombre'))
+                label=f'{source} → {destination}'
+                report_progress(index,len(rows),f'Asignación {index+1}/{len(rows)}: {label}')
                 try:
                     if is_artist:
-                        count=agregar_canciones_a_playlist(sp,row['playlist_id'],obtener_canciones_artista(sp,row['artista_id']))
-                        reports.append(f'{row.get("artista_nombre",row["artista_id"])}: {count} canciones nuevas')
+                        with progress_range(index,index+.75,len(rows),label):
+                            tracks=obtener_canciones_artista(sp,row['artista_id'])
+                        with progress_range(index+.75,index+1,len(rows),label):
+                            count=agregar_canciones_a_playlist(sp,row['playlist_id'],tracks)
+                        reports.append(f'{label}: {count} canciones nuevas')
                     else:
-                        existing=set(get_playlist_items(sp,row['playlist']))
-                        pending=[uri for uri in get_podcast_episodes(sp,row['podcast']) if uri not in existing]
-                        if pending:playlist_add_items(sp,row['playlist'],pending)
-                        reports.append(f'{row.get("podcast_nombre",row["podcast"])}: {len(pending)} episodios nuevos')
-                except Exception as error:reports.append(f'Error: {error}')
+                        with progress_range(index,index+.2,len(rows),label):
+                            existing=set(get_playlist_items(sp,row['playlist']))
+                        with progress_range(index+.2,index+.7,len(rows),label):
+                            pending=list(dict.fromkeys(uri for uri in get_podcast_episodes(sp,row['podcast']) if uri not in existing))
+                        with progress_range(index+.7,index+1,len(rows),label):
+                            if pending:playlist_add_items(sp,row['playlist'],pending)
+                        reports.append(f'{label}: {len(pending)} episodios nuevos')
+                except Exception as error:reports.append(f'{label} · Error: {error}')
+                report_progress(index+1,len(rows),f'{index+1}/{len(rows)} asignaciones procesadas · {label}')
             return reports
         def done(reports):
             status.configure(text='Sincronización finalizada')
+            progress.finish(f'{len(rows)}/{len(rows)} asignaciones procesadas; revisa el resultado de cada una')
             messagebox.showinfo('Resultado','\n'.join(reports),parent=frame)
-        run_job(frame,work,done,controls=controls)
+        run_job(frame,work,done,controls=controls,on_progress=progress.update_progress)
     bar=ctk.CTkFrame(frame);bar.pack(padx=15,pady=10,fill='x')
     for label,action in [('Eliminar asignación',delete),('Sincronizar seleccionadas',lambda:synchronize()),('Sincronizar todas',lambda:synchronize(True))]:
         button=ctk.CTkButton(bar,text=label,command=action)
         button.pack(side='left',padx=5,pady=5);controls.append(button)
-    run_job(frame,lambda:load_assignments(kind),loaded,controls=controls)
+    run_job(frame,load_view,loaded,controls=controls,on_progress=progress.update_progress)
     return frame

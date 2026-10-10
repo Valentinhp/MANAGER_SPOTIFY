@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # from .api_decorator import handle_spotify_errors
 # Si no, define un decorador dummy para que el código corra:
 from .api_decorator import handle_spotify_errors
+from .progress import report_progress
 from .spotify_compat import (search_paginated, cached_entities, create_playlist, read_items, add_items, remove_items, replace_items, remove_from_library)
 
 
@@ -47,6 +48,7 @@ def get_podcast_episodes(sp: Spotify, podcast_id: str) -> List[str]:
             [f"spotify:episode:{ep['id']}" for ep in items if ep and ep.get("id")]
         )
         offset += len(items)
+        report_progress(offset,resp.get('total'),f'Leyendo episodios: {offset}')
         if offset >= resp.get("total", 0):
             break
     return episodes
@@ -65,6 +67,7 @@ def get_playlist_items(sp: Spotify, playlist_id: str) -> Optional[List[str]]:
             if track and track.get("uri"):
                 items.append(track["uri"])
         offset += len(batch)
+        report_progress(offset,resp.get('total'),f'Leyendo elementos de playlist: {offset}')
         if not resp.get("next"):
             break
     return items
@@ -103,6 +106,7 @@ def obtener_playlists_usuario(sp: Spotify) -> List[Tuple[str, str, int]]:
                 (it.get('items') or it.get('tracks') or {}).get('total', 0)))
         if not res.get("next"):
             break
+        report_progress(len(playlists),res.get('total'),'Cargando nombres de playlists…')
         offset += 50
     return playlists
 
@@ -203,6 +207,7 @@ def _get_all_pages(sp: Spotify, initial_results: dict) -> List[Dict]:
         items.extend(results.get('items', []))
 
     while results and results.get('next'):
+        report_progress(len(items),results.get('total'),'Leyendo páginas de Spotify…')
         try:
             results = sp.next(results)
             if is_search:
@@ -241,6 +246,7 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
 
     logger.info("1/3 - Obteniendo álbumes, sencillos y 'appears_on'...")
     for album_type in ['album', 'single', 'compilation', 'appears_on']:
+        report_progress(message=f'{artist_name}: consultando {album_type}…')
         try:
             initial_albums = sp.artist_albums(artista_id, album_type=album_type, limit=50)
             all_albums = _get_all_pages(sp, initial_albums)
@@ -251,7 +257,8 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
             ]
             processed_album_ids.update(album_ids_to_process)
 
-            for album_id in album_ids_to_process:
+            for album_index,album_id in enumerate(album_ids_to_process):
+                report_progress(album_index,len(album_ids_to_process),f'{artist_name}: álbum {album_index+1}/{len(album_ids_to_process)}')
                 initial_tracks = sp.album_tracks(album_id, limit=50)
                 album_tracks = _get_all_pages(sp, initial_tracks)
                 
@@ -286,6 +293,7 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
     ]
 
     for query in search_queries:
+        report_progress(message=f'{artist_name}: buscando colaboraciones…')
         try:
             logger.info(f"    -> Buscando con query: {query}")
             initial_search = search_paginated(sp, query, 'track', 200)
@@ -363,10 +371,12 @@ def agregar_canciones_a_playlist(sp: Spotify, playlist_id: str, tracks: List[dic
     
     added_count = 0
     for i in range(0, len(new_track_uris), 100):
+        report_progress(i,len(new_track_uris),f'Agregando canciones: {i}/{len(new_track_uris)}')
         batch = new_track_uris[i:i + 100]
         try:
             add_items(sp, playlist_id, batch)
             added_count += len(batch)
+            report_progress(added_count,len(new_track_uris),f'Canciones agregadas: {added_count}/{len(new_track_uris)}')
         except Exception as e:
             logger.error(f"Error agregando lote a la playlist: {e}")
             raise

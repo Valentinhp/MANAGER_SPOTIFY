@@ -1,6 +1,8 @@
 import customtkinter as ctk
 from tkinter import ttk,messagebox
 from .async_tasks import run_job
+from .job_progress import JobProgress
+from ..utils.progress import report_progress,progress_range
 from ..utils.spotify_utils import obtener_playlists_usuario,crear_playlist,unfollow_playlist,replace_playlist_items,remove_duplicates_from_playlist,obtener_contenido_playlist
 
 def ventana_crear_playlist(parent,sp):
@@ -11,7 +13,7 @@ def ventana_crear_playlist(parent,sp):
     def create():
         title=name.get().strip()
         if not title:return messagebox.showinfo('Nombre','Escribe un nombre.',parent=frame)
-        run_job(frame,lambda:crear_playlist(sp,title),lambda pid:messagebox.showinfo('Creada',f'Playlist: {pid}',parent=frame),controls=(button,))
+        run_job(frame,lambda:crear_playlist(sp,title),lambda pid:messagebox.showinfo('Creada',f'Playlist creada: {title}',parent=frame),controls=(button,))
     button=ctk.CTkButton(frame,text='Crear playlist privada',command=create)
     button.pack(pady=15)
     return frame
@@ -27,6 +29,7 @@ def playlist_view(parent,sp,action='ver'):
     details=ctk.CTkTextbox(frame,height=150)
     if action=='ver':details.pack(fill='x',padx=15,pady=5)
     rows=[]
+    progress=JobProgress(frame);progress.pack(fill='x',padx=15,pady=5)
     def render(_=None):
         tree.delete(*tree.get_children())
         text=query.get().casefold()
@@ -34,25 +37,30 @@ def playlist_view(parent,sp,action='ver'):
             if text in name.casefold() and not tree.exists(pid):
                 tree.insert('','end',iid=pid,values=(name,count,pid))
     def loaded(values):rows[:]=values;render()
-    def refresh():run_job(frame,lambda:obtener_playlists_usuario(sp),loaded,controls=(refresh_button,))
+    def refresh():run_job(frame,lambda:obtener_playlists_usuario(sp),loaded,controls=(refresh_button,),on_progress=progress.update_progress)
     def operate():
         ids=list(tree.selection())
         if not ids:return messagebox.showinfo('Selección','Selecciona al menos una playlist.',parent=frame)
         if action!='ver' and not messagebox.askyesno('Confirmar',f'¿{action.capitalize()} {len(ids)} playlists seleccionadas?',parent=frame):return
         def work():
             result=[]
-            for pid in ids:
-                if action=='ver':result.extend(f'{title} — {artist}' for _,title,artist in obtener_contenido_playlist(sp,pid))
-                elif action=='vaciar':replace_playlist_items(sp,pid,[]);result.append(f'{pid}: vaciada')
-                elif action=='eliminar':unfollow_playlist(sp,pid);result.append(f'{pid}: dejaste de seguirla')
-                else:
-                    removed,remaining=remove_duplicates_from_playlist(sp,pid)
-                    result.append(f'{pid}: {removed} duplicados eliminados; {remaining} items restantes')
+            names={pid:name for pid,name,_ in rows}
+            for index,pid in enumerate(ids):
+                label=names.get(pid,'Playlist no disponible')
+                report_progress(index,len(ids),f'{action.capitalize()} {index+1}/{len(ids)}: {label}')
+                with progress_range(index,index+1,len(ids),label):
+                    if action=='ver':result.extend(f'{title} — {artist}' for _,title,artist in obtener_contenido_playlist(sp,pid))
+                    elif action=='vaciar':replace_playlist_items(sp,pid,[]);result.append(f'{label}: vaciada')
+                    elif action=='eliminar':unfollow_playlist(sp,pid);result.append(f'{label}: dejaste de seguirla')
+                    else:
+                        removed,remaining=remove_duplicates_from_playlist(sp,pid)
+                        result.append(f'{label}: {removed} duplicados eliminados; {remaining} items restantes')
+                report_progress(index+1,len(ids),f'{index+1}/{len(ids)} playlists procesadas · {label}')
             return result
         def done(result):
             if action=='ver':details.delete('1.0','end');details.insert('end','\n'.join(result) or 'Vacía')
             else:messagebox.showinfo('Completado','\n'.join(result),parent=frame);refresh()
-        run_job(frame,work,done,controls=(button,refresh_button))
+        run_job(frame,work,done,controls=(button,refresh_button),on_progress=progress.update_progress)
     bar=ctk.CTkFrame(frame)
     bar.pack(fill='x',padx=15,pady=10)
     button=ctk.CTkButton(bar,text='Ver contenido' if action=='ver' else 'Aplicar a seleccionadas',command=operate)

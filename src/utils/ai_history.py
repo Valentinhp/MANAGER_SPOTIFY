@@ -37,12 +37,13 @@ def save_generation(prompt, songs):
         _write(rows)
     return entry['id']
 
-def attach_playlist(entry_id, playlist_id):
+def attach_playlist(entry_id, playlist_id, playlist_name=None):
     with _lock:
         rows = load_history()
         for entry in rows:
             if entry['id'] == entry_id:
                 entry['playlist_id'] = playlist_id
+                if playlist_name:entry['playlist_name']=playlist_name
                 _write(rows)
                 return
         raise ValueError('No se encontró la generación en el historial.')

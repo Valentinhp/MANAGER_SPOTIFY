@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 import customtkinter as ctk
 from .async_tasks import run_job
 from .chatgpt_controls import chatgpt_controls
+from .job_progress import JobProgress
 from ..utils.ai_recommender import recomendar_canciones, sugerir_nombre_playlist
 from ..utils.ai_playlist_builder import resolve_suggestions, build_playlist
 from ..utils.ai_history import save_generation, attach_playlist
@@ -57,6 +58,8 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
     ctk.CTkCheckBox(details,text='Pública',variable=public,width=90).pack(side='left',padx=5)
     status = ctk.CTkLabel(frame,text='Selecciona canciones con doble clic. Spotify proporciona los resultados y portadas.')
     status.grid(row=9,column=0,padx=20,pady=8,sticky='w')
+    progress=JobProgress(frame)
+    progress.grid(row=8,column=0,padx=20,pady=5,sticky='ew')
     state = {'rows': [], 'suggested': [], 'history': [], 'generation': None, 'playlist': None, 'cover_token': 0}
     controls = []
 
@@ -120,7 +123,7 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
                 transcript.see('end')
                 transcript.configure(state='disabled')
             display(rows)
-        run_job(frame,work,done,controls=controls)
+        run_job(frame,work,done,controls=controls,on_progress=progress.update_progress)
 
     def suggest_name():
         text=prompt.get().strip()
@@ -128,11 +131,11 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
         def done(value):
             name.delete(0,'end'); name.insert(0,value[0])
             description.delete(0,'end'); description.insert(0,value[1])
-        run_job(frame,lambda:sugerir_nombre_playlist(text,songs),done,controls=controls)
+        run_job(frame,lambda:sugerir_nombre_playlist(text,songs),done,controls=controls,on_progress=progress.update_progress)
 
     def create():
         if state['playlist']:
-            return messagebox.showinfo('Ya creada',f'Esta generación ya creó la playlist {state["playlist"]}.',parent=frame)
+            return messagebox.showinfo('Ya creada',f'Esta generación ya creó: {state.get("playlist_name") or "tu playlist"}.',parent=frame)
         rows=[dict(r) for r in state['rows']]
         title,desc,is_public=name.get(),description.get(),public.get()
         generation=state['generation']
@@ -141,16 +144,17 @@ def ventana_ai_mood(parent, sp, chat=False, initial_prompt=''):
             # Return the successful remote result even if local history cannot be updated.
             warning=None
             try:
-                attach_playlist(generation,playlist['id'])
+                attach_playlist(generation,playlist['id'],playlist.get('name') or title)
             except Exception as error:
                 warning=str(error)
             return playlist,warning
         def done(value):
             playlist,warning=value
             state['playlist']=playlist['id']
-            status.configure(text=f'Playlist creada: {playlist["id"]}')
+            state['playlist_name']=playlist.get('name') or title
+            status.configure(text=f'Playlist creada: {playlist.get("name") or title}')
             messagebox.showinfo('Playlist creada',title+(f'\nHistorial: {warning}' if warning else ''),parent=frame)
-        run_job(frame,work,done,controls=controls)
+        run_job(frame,work,done,controls=controls,on_progress=progress.update_progress)
 
     def open_selected():
         selection=tree.selection()

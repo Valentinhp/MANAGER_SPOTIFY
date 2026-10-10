@@ -98,9 +98,9 @@ def search_view(parent,sp,artist_mode=False,top=False):
         def work():
             playlist=user_playlist_create(sp,'',name,False,'')
             try:playlist_add_items(sp,playlist['id'],[t['uri'] for t in tracks])
-            except Exception as error:raise RuntimeError(f'Playlist {playlist["id"]} creada, pero la carga falló. Revísala antes de reintentar.') from error
+            except Exception as error:raise RuntimeError(f'Playlist «{name}» ({playlist["id"]}) creada, pero la carga falló. Revísala antes de reintentar.') from error
             return playlist['id']
-        run_job(frame,work,lambda pid:messagebox.showinfo('Creada',f'Playlist: {pid}',parent=frame),controls=controls)
+        run_job(frame,work,lambda pid:messagebox.showinfo('Creada',f'Playlist creada: {name}',parent=frame),controls=controls)
     def append():
         pid=state['playlists'].get(existing.get());tracks=chosen()
         if not pid or not tracks:return

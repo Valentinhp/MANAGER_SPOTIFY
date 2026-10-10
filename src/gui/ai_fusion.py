@@ -64,11 +64,11 @@ def ventana_ai_fusion(parent, sp):
         def work():
             playlist=user_playlist_create(sp,'',title,False,'Fusión local balanceada de dos playlists')
             try:playlist_add_items(sp,playlist['id'],uris)
-            except Exception as error:raise RuntimeError(f'Playlist {playlist["id"]} creada; no se completó la carga. Revísala antes de reintentar.') from error
+            except Exception as error:raise RuntimeError(f'Playlist «{title}» ({playlist["id"]}) creada; no se completó la carga. Revísala antes de reintentar.') from error
             return playlist['id']
         def done(pid):
             state['created']=True
-            messagebox.showinfo('Creada',f'Playlist: {pid}',parent=frame)
+            messagebox.showinfo('Creada',f'Playlist creada: {title}',parent=frame)
         run_job(frame,work,done,controls=(preview_button,create_button))
     preview_button=ctk.CTkButton(frame,text='Vista previa de fusión',command=preview)
     preview_button.pack(pady=5)

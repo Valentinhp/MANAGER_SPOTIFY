@@ -4,6 +4,7 @@ import time
 from copy import deepcopy
 from collections import OrderedDict
 from .api_decorator import handle_spotify_errors
+from .progress import report_progress
 
 _cache = OrderedDict()
 _lock = threading.Lock()
@@ -26,13 +27,15 @@ def search_paginated(sp, q, type, total, offset=0):
         if not batch:
             break
         items.extend(batch)
+        report_progress(len(items), min(total, page.get('total', total)), 'Buscando en Spotify…')
         if not page.get('next'):
             break
     return {key: {**page, 'items': items[:total], 'offset': offset, 'limit': total}}
 
 def cached_entities(sp, kind, ids):
     values = []
-    for entity_id in ids:
+    for index, entity_id in enumerate(ids):
+        report_progress(index, len(ids), 'Consultando canciones y artistas…')
         key = (sp, kind, entity_id)
         with _lock:
             value = _cache.get(key)
@@ -58,27 +61,34 @@ def read_items(sp, playlist_id, fields=None, limit=50, offset=0):
     for row in result.get('items') or []:
         if row:
             row['track'] = row.get('item', row.get('track'))
+    count=offset+len(result.get('items') or [])
+    report_progress(count,result.get('total'),f'Leyendo playlist: {count} elementos revisados')
     return result
 
 def add_items(sp, playlist_id, uris):
     uris = [sp._get_uri('track', uri) for uri in uris]
     result = None
     for start in range(0, len(uris), 100):
+        report_progress(start, len(uris), f'Agregando elementos: {start}/{len(uris)}')
         result = _request(sp, '_post', f'playlists/{playlist_id}/items', payload={'uris': uris[start:start+100]})
+        report_progress(min(start+100,len(uris)), len(uris), f'Elementos agregados: {min(start+100,len(uris))}/{len(uris)}')
     return result
 
 def remove_items(sp, playlist_id, items, snapshot_id=None):
     result = None
     items = sorted(items, key=lambda x: max(x.get('positions', [-1])), reverse=True)
     for start in range(0, len(items), 100):
+        report_progress(start, len(items), 'Quitando elementos de la playlist…')
         payload = {'items': items[start:start+100]}
         if snapshot_id:
             payload['snapshot_id'] = snapshot_id
         result = _request(sp, '_delete', f'playlists/{playlist_id}/items', payload=payload)
         snapshot_id = (result or {}).get('snapshot_id')
+        report_progress(min(start+100,len(items)), len(items), 'Elementos retirados')
     return result
 
 def replace_items(sp, playlist_id, uris, snapshot_id=None):
+    report_progress(0, len(uris) or 1, 'Actualizando contenido de la playlist…')
     uris = [sp._get_uri('track', uri) for uri in uris]
     payload = {'uris': uris[:100]}
     if snapshot_id:
@@ -86,6 +96,7 @@ def replace_items(sp, playlist_id, uris, snapshot_id=None):
     result = _request(sp, '_put', f'playlists/{playlist_id}/items', payload=payload)
     if len(uris) > 100:
         result = add_items(sp, playlist_id, uris[100:])
+    report_progress(len(uris) or 1, len(uris) or 1, 'Contenido de playlist actualizado')
     return result
 
 def clean_duplicates(sp, playlist_id):

@@ -50,11 +50,25 @@ def build_main_window(sp, smoke=False):
     status.pack(side='left',padx=12)
     def started():
         state['jobs']+=1
+        progress.configure(mode='indeterminate')
         progress.start()
+        status.configure(text=f'{state["jobs"]} tarea(s) en curso…')
     def finished():
         state['jobs']=max(0,state['jobs']-1)
         if state['jobs']==0:
             progress.stop();progress.set(0)
+            status.configure(text='Listo')
+    def job_progress(done,total,message):
+        if total and state['jobs']==1:
+            progress.stop()
+            progress.configure(mode='determinate')
+            progress.set(max(0,min(1,done/total)))
+            status.configure(text=f'{done/total:.0%} · {message}')
+        else:
+            progress.configure(mode='indeterminate')
+            progress.start()
+            status.configure(text=message)
+    root.job_progress=job_progress
     root.job_started=started
     root.job_finished=finished
     def show_frame(factory,*args):

@@ -59,6 +59,8 @@ El modo anterior de API sigue disponible solo si configuras explícitamente `AI_
 - Artistas: buscar, explorar discografía, filtrar colaboraciones y géneros, ordenar por nombre, fecha o duración; agregar resultados a una playlist nueva o existente.
 - Podcasts: buscar y asignar podcasts a playlists; sincronizar episodios evitando duplicados.
 - Asignaciones de artistas: administrar y sincronizar canciones nuevas.
+- Progreso: las sincronizaciones de artistas y podcasts muestran porcentaje, asignación actual y playlist de destino. La lectura de episodios y las cargas por lotes informan elementos procesados. Las operaciones de playlists tienen barra propia; búsquedas e IA también actualizan el indicador general. Si el total aún no se conoce, se muestra actividad sin inventar un porcentaje.
+- Nombres de playlists: las asignaciones antiguas y el historial consultan los nombres reales de Spotify; los resultados de creación, sincronización y limpieza incluyen el nombre. Si una playlist ya no está disponible, se conserva su nombre guardado o se indica la falta de acceso junto al ID.
 - Radio de Ánimo: generar hasta 15 sugerencias, revisar título/artista y estado de coincidencia, excluir canciones con doble clic y crear solo al pulsar Crear playlist.
 - IA: sugerir nombre y descripción, pedir otras 15 excluyendo sugerencias previas, ordenar con arco de energía y refinar mediante chat. El chat conserva las últimas 20 intervenciones para limitar el contexto.
 - Hora/clima: preparar una solicitud con la hora del sistema y una descripción opcional del clima escrita por ti. No requiere otra API ni transmite ubicación.
@@ -111,6 +113,7 @@ Estos datos, credenciales, cachés, `.venv` y respaldos quedan excluidos de Git.
 .venv\Scripts\python.exe -m compileall src
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe -m tests.smoke_gui
+.venv\Scripts\python.exe -m tests.smoke_sync
 .venv\Scripts\python.exe -m src.app --smoke
 ```
 

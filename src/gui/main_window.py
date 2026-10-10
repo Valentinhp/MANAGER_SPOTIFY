@@ -31,7 +31,8 @@ from ..utils.spotify_utils import check_spotify_api_status
 # Variable global para mantener la referencia al frame actual
 current_frame = None
 
-def build_main_window(sp: Spotify) -> tk.Tk:
+def _build_main_window_legacy(sp: Spotify) -> tk.Tk:
+    # DEPRECATED: conservada como referencia; la aplicación usa CustomTkinter.
     root = tk.Tk()
     root.title("SpotyVManager 🎧")
     root.geometry("1000x720")
@@ -178,3 +179,7 @@ def build_main_window(sp: Spotify) -> tk.Tk:
     refresh_status()
 
     return root
+
+def build_main_window(sp: Spotify, smoke=False):
+    from .main_modern import build_main_window as modern
+    return modern(sp, smoke=smoke)

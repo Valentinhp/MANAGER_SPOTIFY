@@ -1,10 +1,6 @@
-# --- esenciales del proyecto ---
-spotipy==2.23.0
-python-dotenv==1.0.1
-
-# --- dependencias de spotipy fijas para reproducibilidad ---
-requests==2.31.0
-urllib3==2.2.1
-certifi==2024.2.2
-charset-normalizer==3.4.0
-idna==3.7
+﻿spotipy==2.26.0
+python-dotenv>=1.0.1,<2
+anthropic>=0.75,<1
+customtkinter==5.2.2
+pillow>=11,<13
+requests>=2.32.4,<3

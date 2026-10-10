@@ -61,7 +61,7 @@ def read_items(sp, playlist_id, fields=None, limit=50, offset=0):
     return result
 
 def add_items(sp, playlist_id, uris):
-    uris = [sp._get_uri(uri, 'track') for uri in uris]
+    uris = [sp._get_uri('track', uri) for uri in uris]
     result = None
     for start in range(0, len(uris), 100):
         result = _request(sp, '_post', f'playlists/{playlist_id}/items', payload={'uris': uris[start:start+100]})
@@ -79,7 +79,7 @@ def remove_items(sp, playlist_id, items, snapshot_id=None):
     return result
 
 def replace_items(sp, playlist_id, uris):
-    uris = [sp._get_uri(uri, 'track') for uri in uris]
+    uris = [sp._get_uri('track', uri) for uri in uris]
     result = _request(sp, '_put', f'playlists/{playlist_id}/items', payload={'uris': uris[:100]})
     if len(uris) > 100:
         result = add_items(sp, playlist_id, uris[100:])

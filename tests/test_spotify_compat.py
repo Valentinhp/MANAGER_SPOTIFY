@@ -14,7 +14,7 @@ def test_search_pages_are_at_most_ten():
 
 def test_new_playlist_paths_and_item_response():
     sp=Mock()
-    sp._get_uri.side_effect=lambda uri,kind:uri
+    sp._get_uri.side_effect=lambda kind,uri:uri
     create_playlist(sp,'Test',False,'Description')
     sp._post.assert_called_with('me/playlists',payload={'name':'Test','public':False,'description':'Description'})
     sp._get.return_value={'items':[{'item':{'id':'track'}}],'next':None}
@@ -55,7 +55,7 @@ def test_balanced_merge_keeps_order_and_removes_duplicates():
     assert [t['id'] for t in balanced_merge([song(1),song(2),song(3)],[song(4),song(1)])]==['1','4','2','3']
 
 def test_add_retry_does_not_repeat_successful_batch():
-    sp=Mock();sp._get_uri.side_effect=lambda uri,kind:uri
+    sp=Mock();sp._get_uri.side_effect=lambda kind,uri:uri
     sp._post.side_effect=[{'snapshot_id':'first'},SpotifyException(429,-1,'limited',headers={'Retry-After':'0'}),{'snapshot_id':'second'}]
     output=[]
     with patch('src.utils.api_decorator.time.sleep'):
@@ -63,3 +63,10 @@ def test_add_retry_does_not_repeat_successful_batch():
         thread.start();thread.join(timeout=3)
     assert output==[{'snapshot_id':'second'}]
     assert [len(call.kwargs['payload']['uris']) for call in sp._post.call_args_list]==[100,50,50]
+
+def test_real_spotipy_uri_signature_without_network():
+    from spotipy import Spotify
+    sp=Spotify(auth='offline')
+    with patch.object(sp,'_post',return_value={'snapshot_id':'test'}) as post:
+        add_items(sp,'p',['abc','spotify:episode:def'])
+    post.assert_called_once_with('playlists/p/items',payload={'uris':['spotify:track:abc','spotify:episode:def']})

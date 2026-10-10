@@ -40,6 +40,11 @@ class LogViewer(ttk.Frame):
         if event.widget == self:
             gui_handler.set_widget(None)
 
-def ventana_log_viewer(parent, sp):
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_log_viewer(parent, sp):
     """Factory function to create a LogViewer instance."""
     return LogViewer(parent, sp)
+
+def ventana_log_viewer(parent, sp):
+    from .modern_log import ventana_log_viewer as modern
+    return modern(parent, sp)

@@ -15,7 +15,8 @@ from ..config import logger
 
 DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
-def ventana_asignar_artista_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_asignar_artista_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     """Frame para buscar un artista, asignarlo a una playlist y sincronizar."""
     
     frame = ttk.Frame(parent, padding=20)
@@ -151,3 +152,7 @@ def ventana_asignar_artista_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Fram
     btn_asignar.grid(row=5, column=0, pady=20, ipady=5, sticky="ew")
 
     return frame
+
+def ventana_asignar_artista_playlist(parent, sp):
+    from .modern_assignments import assignments_view
+    return assignments_view(parent, sp)

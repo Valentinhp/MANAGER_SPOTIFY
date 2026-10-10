@@ -9,7 +9,8 @@ from ..config import logger
 
 DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
-class VentanaGestionarAsignaciones(ttk.Frame):
+# DEPRECATED: vista original conservada.
+class _LegacyVentanaGestionarAsignaciones(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):
         super().__init__(parent, **kwargs)
         self.sp = sp
@@ -95,3 +96,8 @@ class VentanaGestionarAsignaciones(ttk.Frame):
             except Exception as e:
                 logger.error(f"Error al eliminar: {e}")
                 messagebox.showerror("Error", "No se pudo eliminar la asignación.")
+
+
+def VentanaGestionarAsignaciones(parent, sp, **kwargs):
+    from .modern_assignments import assignments_view
+    return assignments_view(parent, sp)

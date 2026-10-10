@@ -10,7 +10,8 @@ from ..utils.spotify_utils import obtener_canciones_artista, agregar_canciones_a
 
 DATA_FILE = str(Path(__file__).resolve().parents[1] / "data_assignments.json")
 
-class VentanaSincronizarAsignaciones(ttk.Frame):
+# DEPRECATED: vista original conservada.
+class _LegacyVentanaSincronizarAsignaciones(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):
         super().__init__(parent, **kwargs)
         self.sp = sp
@@ -194,3 +195,8 @@ class VentanaSincronizarAsignaciones(ttk.Frame):
         thread = threading.Thread(target=self._sincronizar_todo_worker)
         thread.daemon = True
         thread.start()
+
+
+def VentanaSincronizarAsignaciones(parent, sp, **kwargs):
+    from .modern_assignments import assignments_view
+    return assignments_view(parent, sp, sync_only=True)

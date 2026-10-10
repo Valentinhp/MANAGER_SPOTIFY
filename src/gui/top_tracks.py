@@ -17,7 +17,8 @@ from ..utils.spotify_utils import (
     playlist_add_items,
 )
 
-def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: Spotify ya no proporciona popularidad ni rankings de artistas.
+def _legacy_ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=15)
     frame.grid_columnconfigure(0, weight=1)
     frame.grid_rowconfigure(8, weight=1)
@@ -186,3 +187,8 @@ def ventana_top_tracks(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     ttk.Button(btn_frame, text="Crear Playlist", command=crear_playlist_top).pack(side="left", padx=5)
     
     return frame
+
+
+def ventana_top_tracks(parent, sp):
+    from .modern_search import ventana_artistas
+    return ventana_artistas(parent, sp, top=True)

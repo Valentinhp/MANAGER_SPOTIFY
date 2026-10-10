@@ -39,7 +39,8 @@ GENRE_SEEDS = [
     'tango', 'techno', 'trance', 'trip-hop', 'turkish', 'work-out', 'world-music'
 ]
 
-def ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=10)
     frame.columnconfigure(1, weight=1)
     frame.rowconfigure(4, weight=1)
@@ -198,3 +199,7 @@ def ventana_busqueda_avanzada(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame.bind("<Return>", lambda e: lanzar_busqueda())
     status.config(text="Listo – escribe tu frase y pulsa ⏎")
     return frame
+
+def ventana_busqueda_avanzada(parent, sp):
+    from .modern_search import ventana_busqueda_avanzada as modern
+    return modern(parent, sp)

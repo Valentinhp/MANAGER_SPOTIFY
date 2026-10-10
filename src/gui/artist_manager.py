@@ -18,7 +18,8 @@ from ..utils.spotify_utils import (
     next_page,
 )
 
-class VentanaGestorAutomatico(ttk.Frame):
+# DEPRECATED: vista original conservada.
+class _LegacyVentanaGestorAutomatico(ttk.Frame):
     def __init__(self, parent: ttk.Frame, sp: Spotify, **kwargs):
         super().__init__(parent, **kwargs)
         self.sp = sp
@@ -247,3 +248,7 @@ class VentanaGestorAutomatico(ttk.Frame):
         self.entry_artist.delete(0, tk.END)
         self.play_var.set("nueva")
         self.update_play_option()
+
+def VentanaGestorAutomatico(parent, sp, **kwargs):
+    from .modern_search import ventana_artistas
+    return ventana_artistas(parent, sp)

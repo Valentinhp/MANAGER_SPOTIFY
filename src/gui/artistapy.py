@@ -14,7 +14,8 @@ from ..utils.spotify_utils import (
     playlist_add_items,
 )
 
-def ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=20)
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(1, weight=1)
@@ -94,3 +95,8 @@ def ventana_artistapy(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
 
     ttk.Button(frame, text="Generar y Crear Playlist", command=generar_playlist).pack(pady=10)
     return frame
+
+
+def ventana_artistapy(parent, sp):
+    from .ai_mood import ventana_ai_mood
+    return ventana_ai_mood(parent, sp)

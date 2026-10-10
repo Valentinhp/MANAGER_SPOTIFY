@@ -51,7 +51,8 @@ def guardar_asignaciones(asignaciones):
 # ─────────────────────────────────────────────────────────────
 # Ventana de administración pulida
 # ─────────────────────────────────────────────────────────────
-class VentanaAdminPodcasts(ttk.Frame):
+# DEPRECATED: vista original conservada.
+class _LegacyVentanaAdminPodcasts(ttk.Frame):
     def __init__(self, parent, sp: Spotify, **kwargs):
         super().__init__(parent, **kwargs)
         self.sp = sp
@@ -264,3 +265,8 @@ class VentanaAdminPodcasts(ttk.Frame):
     def _guardar(self):
         if guardar_asignaciones(self.asignaciones):
             messagebox.showinfo("Guardado", "Cambios guardados correctamente.")
+
+
+def VentanaAdminPodcasts(parent, sp, **kwargs):
+    from .modern_assignments import assignments_view
+    return assignments_view(parent, sp, kind="podcast")

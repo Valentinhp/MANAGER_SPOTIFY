@@ -17,7 +17,8 @@ from ..utils.spotify_utils import (
 )
 from ..data_podcasts import data_podcasts
 
-def ventana_sincronizar_podcasts_data(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_sincronizar_podcasts_data(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=20)
     frame.columnconfigure(0, weight=1)
 
@@ -99,3 +100,7 @@ def ventana_sincronizar_podcasts_data(parent: ttk.Frame, sp: Spotify) -> ttk.Fra
     btn_sinc = ttk.Button(frame, text="Iniciar sincronización", command=sincronizar)
     btn_sinc.pack(pady=10)
     return frame
+
+def ventana_sincronizar_podcasts_data(parent, sp):
+    from .modern_assignments import assignments_view
+    return assignments_view(parent, sp, kind="podcast", sync_only=True)

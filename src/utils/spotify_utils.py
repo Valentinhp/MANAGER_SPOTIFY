@@ -174,9 +174,12 @@ def obtener_artistas_seguidos(sp: Spotify):
 def obtener_podcasts_guardados(sp: Spotify):
     podcasts = []
     datos = sp.current_user_saved_shows()
-    for it in datos.get("items", []):
-        show = it["show"]
-        podcasts.append((show["id"], show["name"], show.get("publisher", "")))
+    while datos:
+        for it in datos.get("items", []):
+            show = it.get("show")
+            if show:
+                podcasts.append((show["id"], show["name"], show.get("publisher", "")))
+        datos = sp.next(datos) if datos.get("next") else None
     return podcasts
 
 # --------------------------------------------------------------------------------
@@ -225,7 +228,7 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
         logger.info(f"Iniciando búsqueda exhaustiva para: {artist_name}")
     except Exception as e:
         logger.error(f"Error obteniendo artista {artista_id}: {e}")
-        return []
+        raise
 
     # --- PASO 1: Recopilar TODAS las canciones de todas las fuentes ---
     
@@ -345,10 +348,10 @@ def agregar_canciones_a_playlist(sp: Spotify, playlist_id: str, tracks: List[dic
     if existing_track_ids is None:
         return -1
     
-    new_track_uris = [
+    new_track_uris = list(dict.fromkeys([
         track['uri'] for track in tracks 
         if track and track.get('id') and track.get('uri') and track['id'] not in existing_track_ids
-    ]
+    ]))
     
     if not new_track_uris:
         logger.info("No hay canciones nuevas para agregar")
@@ -362,6 +365,7 @@ def agregar_canciones_a_playlist(sp: Spotify, playlist_id: str, tracks: List[dic
             added_count += len(batch)
         except Exception as e:
             logger.error(f"Error agregando lote a la playlist: {e}")
+            raise
     
     logger.info(f"Agregadas {added_count} canciones nuevas")
     return added_count
@@ -416,7 +420,7 @@ def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int,
         items = []
         offset = 0
         while True:
-            resp = read_items(sp, playlist_id, limit=100, offset=offset, fields="items(track(id,uri)),next")
+            resp = read_items(sp, playlist_id, limit=50, offset=offset, fields="items(item(id,uri)),next,snapshot_id")
             batch = resp.get("items", [])
             if not batch:
                 break
@@ -478,7 +482,7 @@ def remove_duplicates_from_playlist(sp: Spotify, playlist_id: str) -> Tuple[int,
 
     except Exception as e:
         logger.error(f"Error durante la limpieza de duplicados de la playlist {playlist_id}: {e}")
-        return 0, 0
+        raise
 
 # --------------------------------------------------------------------------------
 # API STATUS

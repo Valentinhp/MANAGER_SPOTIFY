@@ -14,7 +14,8 @@ from ..utils.spotify_utils import (
     remove_duplicates_from_playlist,
 )
 
-def ventana_ver_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_ver_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=10)
     
     cols = ("ID", "Nombre", "Tracks")
@@ -32,7 +33,8 @@ def ventana_ver_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
         
     return frame
 
-def ventana_crear_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_crear_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=20)
     frame.columnconfigure(0, weight=1)
 
@@ -56,7 +58,8 @@ def ventana_crear_playlist(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     ttk.Button(frame, text="Crear", command=crear).pack(pady=10)
     return frame
 
-def ventana_eliminar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_eliminar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=10)
     frame.rowconfigure(1, weight=1)
     frame.columnconfigure(0, weight=1)
@@ -120,7 +123,8 @@ def ventana_eliminar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     ttk.Button(frame, text="Eliminar seleccionadas", command=confirmar_elim).pack(pady=10)
     return frame
 
-def ventana_vaciar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_vaciar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=10)
     frame.rowconfigure(1, weight=1)
     frame.columnconfigure(0, weight=1)
@@ -177,7 +181,8 @@ def ventana_vaciar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     ttk.Button(frame, text="Vaciar seleccionadas", command=confirmar_vaciado).pack(pady=10)
     return frame
 
-def ventana_limpiar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
+# DEPRECATED: se conserva la implementaci?n original; usa la vista moderna.
+def _legacy_ventana_limpiar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
     frame = ttk.Frame(parent, padding=10)
     frame.rowconfigure(1, weight=1)
     frame.columnconfigure(0, weight=1)
@@ -245,3 +250,28 @@ def ventana_limpiar_playlists(parent: ttk.Frame, sp: Spotify) -> ttk.Frame:
 
     ttk.Button(frame, text="Limpiar seleccionadas (eliminar duplicados)", command=confirmar_limpieza).pack(pady=10)
     return frame
+
+
+def ventana_ver_playlists(parent, sp):
+    from .modern_playlists import ventana_ver_playlists as modern
+    return modern(parent, sp)
+
+
+def ventana_crear_playlist(parent, sp):
+    from .modern_playlists import ventana_crear_playlist as modern
+    return modern(parent, sp)
+
+
+def ventana_vaciar_playlists(parent, sp):
+    from .modern_playlists import ventana_vaciar_playlists as modern
+    return modern(parent, sp)
+
+
+def ventana_eliminar_playlists(parent, sp):
+    from .modern_playlists import ventana_eliminar_playlists as modern
+    return modern(parent, sp)
+
+
+def ventana_limpiar_playlists(parent, sp):
+    from .modern_playlists import ventana_limpiar_playlists as modern
+    return modern(parent, sp)

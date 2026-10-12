@@ -2,21 +2,24 @@
 
 Aplicación de escritorio en Python y CustomTkinter para organizar playlists, podcasts y asignaciones de artistas. Incluye sugerencias musicales de OpenAI, vista previa y creación de playlists con Spotify. Proyecto independiente, no oficial de Spotify.
 
-## Actualización preparada para GitHub
+## Qué incluye
 
-La rama `modularizado` contiene la actualización de octubre de 2026 sobre la versión que ya estaba publicada. El detalle completo está en [CHANGELOG.md](CHANGELOG.md). Incluye navegación moderna, mejoras de sincronización y progreso, biblioteca visual, recomendaciones de IA basadas en playlists reales y compatibilidad actualizada con la creación de playlists de Spotify.
+- Biblioteca visual para consultar y administrar tus playlists.
+- Recomendaciones con IA usando canciones reales de una playlist como referencia.
+- Sincronización de artistas y podcasts con progreso y conteo de elementos agregados.
+- Vista previa de sugerencias antes de crear una playlist en Spotify.
 
-Para publicar esta actualización:
+Consulta los cambios de la versión en [CHANGELOG.md](CHANGELOG.md).
 
-```powershell
-git checkout modularizado
-git add -A
-git diff --cached --check
-git commit -m "Publicar actualización modularizada"
-git push -u origin modularizado
-```
+## Crear una playlist basada en otra
 
-Después, abre un Pull Request de `modularizado` hacia `master`, o integra la rama en `master` si ese es el flujo del proyecto. **No agregues `.env`, `.cache`, `data/`, `logs/`, `build/`, `dist/` ni `.venv/`**: están excluidos por `.gitignore` y pueden contener credenciales, tokens o datos locales.
+1. Abre **Crear con IA → Chat musical**.
+2. Pulsa **Cargar playlists** y elige la playlist de referencia.
+3. Escribe qué buscas, por ejemplo: «Mantén el estilo y la energía, con artistas que todavía no estén en mi lista».
+4. Pulsa **Generar 15**. La app lee las canciones desde Spotify y muestra cuántas cargó; envía hasta 100 como referencia a la IA y excluye las canciones de origen.
+5. Revisa las sugerencias, cambia el nombre y pulsa **Crear playlist**.
+
+La referencia contiene títulos y artistas; la IA no escucha el audio. La similitud es una estimación y puedes ajustar la solicitud antes de guardar.
 
 ## Instalación local
 

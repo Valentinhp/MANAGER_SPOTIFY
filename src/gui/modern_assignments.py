@@ -3,6 +3,7 @@ from tkinter import ttk,messagebox,simpledialog
 from .async_tasks import run_job
 from .job_progress import JobProgress
 from ..utils.progress import report_progress,progress_range
+from ..utils.spotify_rate_limit import SpotifyRateLimitError
 from ..utils.playlist_names import resolve_playlist_names,playlist_label
 from ..utils.assignments import load_assignments,save_assignments
 from ..utils.spotify_utils import (search,obtener_playlists_usuario,crear_playlist,obtener_canciones_artista,
@@ -129,13 +130,21 @@ def assignments_view(parent,sp,kind='artist',sync_only=False):
                         with progress_range(index+.7,index+1,len(rows),label):
                             if pending:playlist_add_items(sp,row['playlist'],pending)
                         reports.append(f'{label}: {len(pending)} episodios nuevos')
+                except SpotifyRateLimitError as error:
+                    reports.append(f'{label} · Pendiente: {error}')
+                    return reports,index,str(error)
                 except Exception as error:reports.append(f'{label} · Error: {error}')
                 report_progress(index+1,len(rows),f'{index+1}/{len(rows)} asignaciones procesadas · {label}')
-            return reports
-        def done(reports):
+            return reports,len(rows),None
+        def done(result):
+            reports,processed,stopped=result
             summary=f'Total: {counter["added"]} {unit} nuevos agregados'
-            status.configure(text=f'Sincronización finalizada · {summary}')
-            progress.finish(f'{len(rows)}/{len(rows)} asignaciones procesadas; revisa el resultado de cada una')
+            status.configure(text=f'Sincronización {"detenida" if stopped else "finalizada"} · {summary}')
+            if stopped:
+                progress.update_progress(processed,len(rows),f'{processed}/{len(rows)} asignaciones procesadas · {stopped}')
+                reports.append(f'{len(rows)-processed} asignaciones pendientes. Vuelve a sincronizar cuando termine la espera.')
+            else:
+                progress.finish(f'{len(rows)}/{len(rows)} asignaciones procesadas; revisa el resultado de cada una')
             messagebox.showinfo('Resultado',summary+'\n\n'+'\n'.join(reports),parent=frame)
         run_job(frame,work,done,controls=controls,on_progress=progress.update_progress,on_added=added)
     bar=ctk.CTkFrame(frame);bar.pack(padx=15,pady=10,fill='x')

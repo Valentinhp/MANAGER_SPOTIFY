@@ -31,11 +31,43 @@ def main():
         from src.gui.ai_profile import ventana_ai_profile
         from src.gui.ai_context import ventana_ai_context
         pages += [ventana_ai_history,ventana_ai_fusion,ventana_ai_profile,ventana_ai_context]
+        from src.gui.navigation import section, settings
+        from src.gui.visual_library import ventana_biblioteca
+        pages += [ventana_biblioteca,settings,lambda p,s:section(p,s,[('Biblioteca',ventana_biblioteca),('Crear',main_modern.ventana_crear_playlist)])]
         for page in pages:
             root.show_frame(page)
             deadline=time.monotonic()+0.25
             while time.monotonic()<deadline:
                 root.update();time.sleep(0.01)
+        # Exercise card -> populated detail -> library and stale worker callbacks.
+        import customtkinter as ctk
+        from PIL import Image
+        playlist={'id':'test-list','name':'Biblioteca de prueba','images':[{'url':'mock-cover'}],'owner':{'display_name':'Prueba'}}
+        track={'id':'test-track','name':'Canción de prueba','uri':'spotify:track:test-track','artists':[{'name':'Artista de prueba'}],'album':{'images':[{'url':'mock-cover'}]},'duration_ms':183000}
+        with patch('src.gui.visual_library.current_user_playlists',side_effect=response({'items':[playlist],'next':None})),patch('src.gui.visual_library.playlist_items',side_effect=response({'items':[{'item':track}],'next':None})),patch('src.gui.visual_library.load_cover',side_effect=response(Image.new('RGB',(160,160),'#1db954'))):
+            root.show_frame(ventana_biblioteca)
+            def settle():
+                deadline=time.monotonic()+0.4
+                while time.monotonic()<deadline:
+                    root.update();time.sleep(0.01)
+            def descendants(widget):
+                for child in widget.winfo_children():
+                    yield child
+                    yield from descendants(child)
+            settle()
+            card=next(w for w in descendants(root) if isinstance(w,ctk.CTkButton) and w.cget('text')=='Abrir playlist')
+            card.invoke();settle()
+            assert any(isinstance(w,ctk.CTkLabel) and w.cget('text')==track['name'] for w in descendants(root))
+            back=next(w for w in descendants(root) if isinstance(w,ctk.CTkButton) and w.cget('text')=='Biblioteca')
+            back.invoke();settle()
+            import sys
+            if '--snapshot' in sys.argv:
+                from PIL import ImageGrab
+                root.lift();root.update()
+                x,y=root.winfo_rootx(),root.winfo_rooty()
+                target=Path('local_backups')/'library-preview.png'
+                target.parent.mkdir(exist_ok=True)
+                ImageGrab.grab(bbox=(x,y,x+root.winfo_width(),y+root.winfo_height())).save(target)
         root.destroy()
     if failures:raise AssertionError(failures)
     print(f'{len(pages)} pantallas abiertas sin red real ni errores de Tk')

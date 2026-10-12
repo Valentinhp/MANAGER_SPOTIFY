@@ -1,3 +1,4 @@
+from .track_art import load_tree_art
 import customtkinter as ctk
 from tkinter import ttk,messagebox
 from .async_tasks import run_job
@@ -25,8 +26,10 @@ def search_view(parent,sp,artist_mode=False,top=False):
     artist_tree=ttk.Treeview(frame,columns=('artist',),show='headings',height=3)
     artist_tree.heading('artist',text='Artistas encontrados: doble clic para cargar discografía')
     if artist_mode:artist_tree.pack(fill='x',padx=15,pady=5)
-    tree=ttk.Treeview(frame,columns=('title','artist','date'),show='headings',selectmode='extended')
+    tree=ttk.Treeview(frame,columns=('title','artist','date'),show='tree headings',selectmode='extended')
     for key,title in [('title','Título'),('artist','Artista'),('date','Fecha')]:tree.heading(key,text=title)
+    tree.column('#0',width=52,stretch=False)
+    tree.heading('#0',text='')
     tree.pack(fill='both',expand=True,padx=15,pady=5)
     bar=ctk.CTkFrame(frame);bar.pack(fill='x',padx=15,pady=5)
     title=ctk.CTkEntry(bar,placeholder_text='Nombre de nueva playlist');title.insert(0,'Mi playlist');title.pack(side='left',padx=5,pady=5)
@@ -58,6 +61,7 @@ def search_view(parent,sp,artist_mode=False,top=False):
         state['tracks']=tracks
         tree.delete(*tree.get_children())
         for t in tracks:tree.insert('','end',iid=t['id'],values=(t.get('name',''),', '.join(a.get('name','') for a in t.get('artists',[])),t.get('album',{}).get('release_date','')))
+        load_tree_art(frame,tree,[(t['id'],t) for t in tracks])
         status.configure(text=f'{len(tracks)} resultados. Spotify proporciona los títulos y artistas.')
     def search_now():
         text=query.get().strip()

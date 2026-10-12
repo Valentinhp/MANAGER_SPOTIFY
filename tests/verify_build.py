@@ -14,6 +14,8 @@ def main():
     for name in archive.toc:
         assert name.replace('\\','/').split('/')[-1] not in ('.env','.cache','chatgpt-session.bin'),f'Archivo privado incluido: {name}'
     pyz=archive.open_embedded_archive(next(name for name in archive.toc if name.endswith('.pyz')))
+    assert 'tkinter' in pyz.toc, 'Falta Tkinter en el ejecutable'
+    assert any(name.replace('\\','/').endswith('_tcl_data/init.tcl') for name in archive.toc), 'Faltan los recursos de Tcl/Tk'
     assert 'openai' in pyz.toc, 'Falta el SDK de OpenAI en el ejecutable'
     assert 'src.utils.chatgpt_session' in pyz.toc and 'jwt' in pyz.toc, 'Falta la conexión al plan de ChatGPT'
     assert not any(module == 'anthropic' or module.startswith('anthropic.') for module in pyz.toc), 'El ejecutable conserva el SDK anterior'

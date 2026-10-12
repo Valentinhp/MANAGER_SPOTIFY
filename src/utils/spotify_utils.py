@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 # from .api_decorator import handle_spotify_errors
 # Si no, define un decorador dummy para que el código corra:
 from .api_decorator import handle_spotify_errors
+from .spotify_rate_limit import SpotifyRateLimitError
+from spotipy.exceptions import SpotifyException
 from .progress import report_progress
 from .spotify_compat import (search_paginated, cached_entities, create_playlist, read_items, add_items, remove_items, replace_items, remove_from_library)
 
@@ -216,9 +218,11 @@ def _get_all_pages(sp: Spotify, initial_results: dict) -> List[Dict]:
             else:
                 page_items = results.get('items', [])
             items.extend(page_items)
+        except (SpotifyRateLimitError, SpotifyException):
+            raise
         except Exception as e:
             logger.error(f"Error al obtener la siguiente página: {e}")
-            break
+            raise
     return items
 
 # ############################################################################
@@ -262,13 +266,12 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
                 initial_tracks = sp.album_tracks(album_id, limit=50)
                 album_tracks = _get_all_pages(sp, initial_tracks)
                 
-                track_ids_to_fetch = [t['id'] for t in album_tracks if t and t.get('id')]
-                
-                for i in range(0, len(track_ids_to_fetch), 50):
-                    batch_ids = track_ids_to_fetch[i:i+50]
-                    if not batch_ids: continue
-                    full_track_details = cached_entities(sp, "track", batch_ids)
-                    all_tracks_raw.extend(t for t in full_track_details['tracks'] if t)
+                # Las pistas del álbum ya incluyen artistas, URI y duración.
+                # Añadimos su fecha sin pedir de nuevo cada canción a Spotify.
+                album = next(a for a in all_albums if a and a.get('id') == album_id)
+                all_tracks_raw.extend(dict(t, album=album) for t in album_tracks if t and t.get('id'))
+        except (SpotifyRateLimitError, SpotifyException):
+            raise
         except Exception as e:
             logger.warning(f"Error procesando {album_type} para {artist_name}: {e}")
 
@@ -276,6 +279,8 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
     try:
         top_tracks = search_paginated(sp, f'artist:"{artist_name}"', 'track', 50)
         all_tracks_raw.extend(top_tracks.get('tracks', {}).get('items', []))
+    except (SpotifyRateLimitError, SpotifyException):
+        raise
     except Exception as e:
         logger.warning(f"Error obteniendo top tracks: {e}")
 
@@ -297,9 +302,12 @@ def obtener_canciones_artista(sp: Spotify, artista_id: str) -> List[Dict]:
         try:
             logger.info(f"    -> Buscando con query: {query}")
             initial_search = search_paginated(sp, query, 'track', 200)
-            search_tracks = _get_all_pages(sp, initial_search)
+            # search_paginated ya reunió las páginas hasta el límite solicitado.
+            search_tracks = initial_search.get('tracks', {}).get('items', [])
             all_tracks_raw.extend(search_tracks)
             time.sleep(0.1) # Pequeña pausa para no saturar la API
+        except (SpotifyRateLimitError, SpotifyException):
+            raise
         except Exception as e:
             logger.warning(f"Error en la búsqueda con query '{query}': {e}")
     

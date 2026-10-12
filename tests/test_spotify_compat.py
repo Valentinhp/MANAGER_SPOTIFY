@@ -27,7 +27,12 @@ def test_new_playlist_paths_and_item_response():
     sp=Mock()
     sp._get_uri.side_effect=lambda kind,uri:uri
     create_playlist(sp,'Test',False,'Description')
-    sp._post.assert_called_with('me/playlists',payload={'name':'Test','public':False,'description':'Description'})
+    sp._post.assert_called_with('me/playlists',payload={
+        'name':'Test',
+        'public':False,
+        'collaborative':False,
+        'description':'Description',
+    })
     sp._get.return_value={'items':[{'item':{'id':'track'}}],'next':None}
     assert read_items(sp,'p',fields='items(track(id)),next')['items'][0]['track']['id']=='track'
     sp._get.assert_called_with('playlists/p/items',limit=50,offset=0,additional_types='track,episode',fields='items(item(id)),next')

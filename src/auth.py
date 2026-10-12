@@ -4,6 +4,7 @@ from spotipy.cache_handler import CacheFileHandler
 from spotipy.oauth2 import SpotifyOAuth
 from .config import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SCOPES, APP_DIR, DATA_DIR
 import sys
+from .utils.spotify_rate_limit import RateLimitedSpotify
 
 def get_spotify_client() -> spotipy.Spotify:
     if not CLIENT_ID or not CLIENT_SECRET:
@@ -17,4 +18,5 @@ def get_spotify_client() -> spotipy.Spotify:
         scope=SCOPES,
         cache_handler=CacheFileHandler(cache_path=str(cache_path)),
     )
-    return spotipy.Spotify(auth_manager=auth_manager, requests_timeout=30, retries=0, status_retries=0)
+    return RateLimitedSpotify(cooldown_path=DATA_DIR / 'spotify_cooldown.json', client_id=CLIENT_ID,
+        auth_manager=auth_manager, requests_timeout=30, retries=0, status_retries=0)

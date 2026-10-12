@@ -51,7 +51,20 @@ def cached_entities(sp, kind, ids):
     return {kind+'s': values}
 
 def create_playlist(sp, name, public=False, description=''):
-    return _request(sp, '_post', 'me/playlists', payload={'name': name, 'public': public, 'description': description})
+    name = str(name).strip()
+    description = str(description or '').strip()
+    if not name:
+        raise ValueError('La playlist necesita un nombre.')
+    if len(name) > 100:
+        raise ValueError('El nombre de la playlist no puede superar 100 caracteres.')
+    if len(description) > 300:
+        raise ValueError('La descripción de la playlist no puede superar 300 caracteres.')
+    return _request(sp, '_post', 'me/playlists', payload={
+        'name': name,
+        'public': bool(public),
+        'collaborative': False,
+        'description': description,
+    })
 
 def read_items(sp, playlist_id, fields=None, limit=50, offset=0):
     params = {'limit': min(limit, 50), 'offset': offset, 'additional_types': 'track,episode'}

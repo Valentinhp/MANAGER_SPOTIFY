@@ -2,6 +2,22 @@
 
 Aplicación de escritorio en Python y CustomTkinter para organizar playlists, podcasts y asignaciones de artistas. Incluye sugerencias musicales de OpenAI, vista previa y creación de playlists con Spotify. Proyecto independiente, no oficial de Spotify.
 
+## Actualización preparada para GitHub
+
+La rama `modularizado` contiene la actualización de octubre de 2026 sobre la versión que ya estaba publicada. El detalle completo está en [CHANGELOG.md](CHANGELOG.md). Incluye navegación moderna, mejoras de sincronización y progreso, biblioteca visual, recomendaciones de IA basadas en playlists reales y compatibilidad actualizada con la creación de playlists de Spotify.
+
+Para publicar esta actualización:
+
+```powershell
+git checkout modularizado
+git add -A
+git diff --cached --check
+git commit -m "Publicar actualización modularizada"
+git push -u origin modularizado
+```
+
+Después, abre un Pull Request de `modularizado` hacia `master`, o integra la rama en `master` si ese es el flujo del proyecto. **No agregues `.env`, `.cache`, `data/`, `logs/`, `build/`, `dist/` ni `.venv/`**: están excluidos por `.gitignore` y pueden contener credenciales, tokens o datos locales.
+
 ## Instalación local
 
 Requiere Python 3.10 o posterior con Tkinter; validado en Windows con Python 3.13.
@@ -55,6 +71,8 @@ El modo anterior de API sigue disponible solo si configuras explícitamente `AI_
 
 ## Funciones
 
+La navegación se organiza en Inicio, Mis playlists, Crear con IA, Explorar música y Sincronizaciones; Configuración y Registro quedan como accesos auxiliares. Las acciones anteriores siguen disponibles en las pestañas de cada sección. Mis playlists muestra una biblioteca de portadas y permite abrir una lista para consultar sus canciones con miniaturas y duración. Inicio muestra hasta seis playlists; las búsquedas y sugerencias incluyen miniaturas de álbum. Las imágenes se descargan en segundo plano, usan la caché local y muestran un símbolo musical si no hay portada. Para limitar cargas grandes, se descargan miniaturas para los primeros 40 resultados de cada vista. La ventana adapta su tamaño inicial a la pantalla y al escalado de Windows.
+
 - Playlists: consultar contenido, crear, vaciar, dejar de seguir y limpiar duplicados.
 - Artistas: buscar, explorar discografía, filtrar colaboraciones y géneros, ordenar por nombre, fecha o duración; agregar resultados a una playlist nueva o existente.
 - Podcasts: buscar y asignar podcasts a playlists; sincronizar episodios evitando duplicados.
@@ -62,7 +80,7 @@ El modo anterior de API sigue disponible solo si configuras explícitamente `AI_
 - Progreso: las sincronizaciones de artistas y podcasts muestran porcentaje, asignación actual y playlist de destino. La lectura de episodios y las cargas por lotes informan elementos procesados. Las operaciones de playlists tienen barra propia; búsquedas e IA también actualizan el indicador general. Si el total aún no se conoce, se muestra actividad sin inventar un porcentaje.
 - Contador de nuevos elementos: durante la sincronización se muestran las canciones o episodios realmente agregados y el total final. Solo cuentan lotes confirmados por Spotify; ante un fallo parcial se conserva lo que sí se agregó.
 - Nombres de playlists: las asignaciones antiguas y el historial consultan los nombres reales de Spotify; los resultados de creación, sincronización y limpieza incluyen el nombre. Si una playlist ya no está disponible, se conserva su nombre guardado o se indica la falta de acceso junto al ID.
-- Radio de Ánimo: generar hasta 15 sugerencias, revisar título/artista y estado de coincidencia, excluir canciones con doble clic y crear solo al pulsar Crear playlist.
+- Radio de Ánimo y Chat musical: cargar una playlist propia como referencia, enviar a la IA una muestra de sus canciones (sin audio) y calcular el estilo, sentimiento, feeling y energía promedio de todo el conjunto —no imitar una sola canción—, excluir las canciones de origen y las sugerencias previas, revisar título/artista y estado de coincidencia y crear solo al pulsar Crear playlist.
 - IA: sugerir nombre y descripción, pedir otras 15 excluyendo sugerencias previas, ordenar con arco de energía y refinar mediante chat. El chat conserva las últimas 20 intervenciones para limitar el contexto.
 - Hora/clima: preparar una solicitud con la hora del sistema y una descripción opcional del clima escrita por ti. No requiere otra API ni transmite ubicación.
 - Historial local: consultar solicitudes, canciones sugeridas y la playlist creada.
@@ -109,6 +127,8 @@ El código activo está en `src/`. Se consolidaron 39 asignaciones del directori
 Estos datos, credenciales, cachés, `.venv` y respaldos quedan excluidos de Git. En el ejecutable, datos, caché y logs se guardan bajo `%LOCALAPPDATA%\SpotyVManager` en Windows; en otros sistemas, bajo `~/SpotyVManager`.
 
 ## Validación
+
+Si Spotify responde 429, la sincronización se detiene conservando el conteo de canciones o episodios confirmados y muestra las asignaciones pendientes. La app respeta `Retry-After`, guarda el plazo en `data/spotify_cooldown.json` para conservarlo al reiniciar y separa las peticiones de su cliente. No reanuda sola: vuelve a sincronizar después del plazo indicado. Las pistas de álbumes se reutilizan sin consultar cada canción individualmente y las búsquedas no vuelven a paginar resultados ya reunidos. [Límites de Spotify](https://developer.spotify.com/documentation/web-api/concepts/rate-limits).
 
 ```powershell
 .venv\Scripts\python.exe -m compileall src
